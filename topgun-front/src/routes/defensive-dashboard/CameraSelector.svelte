@@ -11,6 +11,7 @@
 		onToggleCamera: (cameraId: string) => void;
 		onSearch: () => void;
 		onSearchChange: (value: string) => void;
+		onSearchInput: () => void;
 		onNextPage: () => void;
 		onPrevPage: () => void;
 	}
@@ -25,9 +26,17 @@
 		onToggleCamera,
 		onSearch,
 		onSearchChange,
+		onSearchInput,
 		onNextPage,
 		onPrevPage
 	}: Props = $props();
+
+	// Highlight matching text
+	function highlightText(text: string, keyword: string): string {
+		if (!keyword.trim()) return text;
+		const regex = new RegExp(`(${keyword.trim()})`, 'gi');
+		return text.replace(regex, '<mark>$1</mark>');
+	}
 </script>
 
 <aside class="sidebar">
@@ -41,6 +50,7 @@
 				bind:value={searchName}
 				placeholder="Search by name, location..."
 				class="search-input"
+				oninput={onSearchInput}
 				onkeydown={(e) => e.key === 'Enter' && onSearch()}
 			/>
 			<button class="btn-search" onclick={onSearch}>Search</button>
@@ -84,18 +94,18 @@
 							{:else}
 								<span class="uncheck-icon">○</span>
 							{/if}
-						</div>
-						<div class="camera-info">
-							<div class="camera-name">{camera.name}</div>
-							<div class="camera-location">
-								<span class="icon-small">📍</span>
-								{camera.location}
 							</div>
-							<div class="camera-institute">
-								<span class="icon-small">🏛️</span>
-								{camera.institute}
-							</div>
-							{#if wsConnections.has(camera.id)}
+							<div class="camera-info">
+								<div class="camera-name">{@html highlightText(camera.name, searchName)}</div>
+								<div class="camera-location">
+									<span class="icon-small">📍</span>
+									{@html highlightText(camera.location, searchName)}
+								</div>
+								<div class="camera-institute">
+									<span class="icon-small">🏛️</span>
+									{@html highlightText(camera.institute, searchName)}
+								</div>
+								{#if wsConnections.has(camera.id)}
 								<div class="camera-status connected">
 									<span class="status-dot"></span>
 									Connected
@@ -434,5 +444,13 @@
 
 	.icon {
 		display: inline-block;
+	}
+
+	:global(mark) {
+		background-color: #fef08a;
+		color: #1f2937;
+		padding: 0.125rem 0.25rem;
+		border-radius: 3px;
+		font-weight: 600;
 	}
 </style>

@@ -32,6 +32,7 @@
 	// WebSocket connections map (camera_id -> WebSocket)
 	let wsConnections = $state<Map<string, WebSocket>>(new Map());
 	let reconnectTimeouts = new Map<string, any>();
+	let searchDebounceTimeout: any = null;
 
 	// Fetch cameras from API
 	async function fetchCameras(page: number = 1, search: string = '') {
@@ -43,7 +44,8 @@
 			});
 
 			if (search.trim()) {
-				params.append('search', search.trim());
+				params.append('keyword', search.trim());
+				params.append('column', 'name,location,institute');
 			}
 
 			const response = await fetch(`${apiUrl}/camera?${params}`);
@@ -235,6 +237,16 @@
 		fetchCameras(1, searchCameraName);
 	}
 
+	// Debounced search - auto search after 0.5 seconds
+	function handleSearchInput() {
+		if (searchDebounceTimeout) {
+			clearTimeout(searchDebounceTimeout);
+		}
+		searchDebounceTimeout = setTimeout(() => {
+			fetchCameras(1, searchCameraName);
+		}, 500);
+	}
+
 	// Load more cameras (pagination)
 	function loadNextPage() {
 		if (cameraPagination.page < cameraPagination.totalPages) {
@@ -258,6 +270,13 @@
 		return camera ? camera.name : cameraId.substring(0, 8);
 	}
 
+	// Highlight matching text
+	function highlightText(text: string, keyword: string): string {
+		if (!keyword.trim()) return text;
+		const regex = new RegExp(`(${keyword.trim()})`, 'gi');
+		return text.replace(regex, '<mark>$1</mark>');
+	}
+
 	// Debug: Log marker changes
 	$effect(() => {
 		console.log('Markers state updated:', markers.length, markers);
@@ -270,6 +289,9 @@
 
 	onDestroy(() => {
 		disconnectAllCameras();
+		if (searchDebounceTimeout) {
+			clearTimeout(searchDebounceTimeout);
+		}
 	});
 </script>
 
@@ -298,6 +320,7 @@
 			onToggleCamera={toggleCameraSelection}
 			onSearch={handleSearch}
 			onSearchChange={(value) => (searchCameraName = value)}
+			onSearchInput={handleSearchInput}
 			onNextPage={loadNextPage}
 			onPrevPage={loadPrevPage}
 		/>

@@ -39,6 +39,7 @@ func (s *Server) SetupRoutes(app *fiber.App) {
 	authRepository := auth.NewAuthRepository(s.MainDbConn, s.JwtResources, s.RedisStorage)
 	cameraRepository := camera.NewCameraRepository(s.MainDbConn)
 	detectRepository := detect.NewDetectRepository(s.MainDbConn)
+
 	// auto migrate DB only on main process
 	if !fiber.IsChild() {
 		if migrateErr := s.AutoMigrate(); migrateErr != nil {

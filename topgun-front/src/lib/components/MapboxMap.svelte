@@ -60,6 +60,29 @@
 		});
 
 		console.log('Markers updated on map:', markers.length, 'Total mapbox markers:', mapboxMarkers.length);
+
+		// Auto-fit map to show all markers
+		if (markers.length > 0) {
+			if (markers.length === 1) {
+				// Single marker: center on it with fixed zoom
+				map!.flyTo({
+					center: markers[0].lngLat,
+					zoom: 15,
+					duration: 1000
+				});
+			} else {
+				// Multiple markers: fit bounds to show all
+				const bounds = new mapboxgl.LngLatBounds();
+				markers.forEach((marker) => {
+					bounds.extend(marker.lngLat);
+				});
+				map!.fitBounds(bounds, {
+					padding: { top: 50, bottom: 50, left: 50, right: 50 },
+					maxZoom: 15,
+					duration: 1000
+				});
+			}
+		}
 	}
 
 	// Watch for center changes and update map

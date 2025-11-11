@@ -188,8 +188,9 @@ func (h *detectHandler) CreateDetect() fiber.Handler {
 // @Accept json
 // @Produce json
 // @Param page query int false "Page number"
-// @Param limit query int false "Items per page"
-// @Param search query string false "Search filter"
+// @Param per_page query int false "Items per page"
+// @Param keyword query string false "Search filter"
+// @Param column query string false "Search column"
 // @Router /api/v1/detect/ [get]
 // @Security ApiKeyAuth
 func (h *detectHandler) GetDetects() fiber.Handler {

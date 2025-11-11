@@ -174,11 +174,15 @@ paths:
         type: integer
       - description: Items per page
         in: query
-        name: limit
+        name: per_page
         type: integer
-      - description: Search term
+      - description: Search filter
         in: query
-        name: search
+        name: keyword
+        type: string
+      - description: Search column
+        in: query
+        name: column
         type: string
       produces:
       - application/json
@@ -280,11 +284,15 @@ paths:
         type: integer
       - description: Items per page
         in: query
-        name: limit
+        name: per_page
         type: integer
       - description: Search filter
         in: query
-        name: search
+        name: keyword
+        type: string
+      - description: Search column
+        in: query
+        name: column
         type: string
       produces:
       - application/json

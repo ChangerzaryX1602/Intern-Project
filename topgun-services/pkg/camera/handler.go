@@ -31,8 +31,9 @@ func NewCameraHandler(router fiber.Router, routerResource *handlers.RouterResour
 // @Accept json
 // @Produce json
 // @Param page query int false "Page number"
-// @Param limit query int false "Items per page"
-// @Param search query string false "Search term"
+// @Param per_page query int false "Items per page"
+// @Param keyword query string false "Search filter"
+// @Param column query string false "Search column"
 // @Router /api/v1/camera/ [get]
 // @Security ApiKeyAuth
 func (h *cameraHandler) GetCameras() fiber.Handler {

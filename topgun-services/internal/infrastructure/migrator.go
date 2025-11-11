@@ -7,6 +7,7 @@ func (s *Server) AutoMigrate() (err error) {
 		models.User{},
 		models.Camera{},
 		models.Detect{},
+		models.Attack{},
 	); err != nil {
 		return
 	}

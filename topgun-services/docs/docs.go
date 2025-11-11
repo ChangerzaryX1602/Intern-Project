@@ -181,13 +181,19 @@ const docTemplate = `{
                     {
                         "type": "integer",
                         "description": "Items per page",
-                        "name": "limit",
+                        "name": "per_page",
                         "in": "query"
                     },
                     {
                         "type": "string",
-                        "description": "Search term",
-                        "name": "search",
+                        "description": "Search filter",
+                        "name": "keyword",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Search column",
+                        "name": "column",
                         "in": "query"
                     }
                 ],
@@ -347,13 +353,19 @@ const docTemplate = `{
                     {
                         "type": "integer",
                         "description": "Items per page",
-                        "name": "limit",
+                        "name": "per_page",
                         "in": "query"
                     },
                     {
                         "type": "string",
                         "description": "Search filter",
-                        "name": "search",
+                        "name": "keyword",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Search column",
+                        "name": "column",
                         "in": "query"
                     }
                 ],
