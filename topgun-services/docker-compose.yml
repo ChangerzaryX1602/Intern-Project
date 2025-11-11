@@ -1,0 +1,135 @@
+version: '3.8'
+
+networks:
+  traefik:
+    name: traefik
+
+services:
+  traefik:
+    image: traefik:v3.0
+    container_name: traefik
+    command:
+      - --api.insecure=true
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+      # - --entrypoints.websecure.address=:443
+      # - --certificatesresolvers.myresolver.acme.tlschallenge=true
+      # - --certificatesresolvers.myresolver.acme.email=admin@example.com
+      # - --certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json
+    ports:
+      - "80:80"
+      # - "443:443"
+      - "8080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik_letsencrypt:/letsencrypt
+    networks:
+      - traefik
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: topgun-postgres
+    environment:
+      POSTGRES_DB: topgun_admission
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      TZ: Asia/Bangkok
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - traefik
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: topgun-redis
+    environment:
+      TZ: Asia/Bangkok
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - traefik
+    restart: unless-stopped
+
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: topgun-mosquitto
+    environment:
+      TZ: Asia/Bangkok
+    ports:
+      - "1883:1883"  # MQTT
+      - "9001:9001"  # WebSocket
+    volumes:
+      - mosquitto_data:/mosquitto/data
+      - mosquitto_logs:/mosquitto/log
+      - ./mosquitto/config:/mosquitto/config
+    healthcheck:
+      test: ["CMD", "mosquitto_sub", "-t", "$$SYS/#", "-C", "1", "-i", "healthcheck", "-W", "3"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - traefik
+    restart: unless-stopped
+
+  topgun-services:
+    container_name: topgun-services
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.topgun-services.rule=Host(`10.101.111.103`) && PathPrefix(`/api/`)
+      - traefik.http.routers.topgun-services.entrypoints=web
+      - traefik.http.services.topgun-services.loadbalancer.server.port=8080
+    volumes:
+      - ./configs:/app/configs
+      - ./log:/app/log
+      - ./assets:/app/internal/assets
+      - ./assets/jwt:/app/internal/assets/jwt
+    command: ["--env=uat"]
+    networks:
+      - traefik
+    restart: unless-stopped
+    depends_on:
+      - postgres
+      - redis
+      - mosquitto
+
+  topgun-front:
+    container_name: topgun-front
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.topgun-front.rule=Host(`10.101.111.103`) && !PathPrefix(`/api/`)
+      - traefik.http.routers.topgun-front.entrypoints=web
+      - traefik.http.services.topgun-front.loadbalancer.server.port=4000
+    environment:
+      NODE_ENV: production
+      PORT: "4000"          
+    entrypoint: ["node","dist/topgun-front/server/server.mjs"]
+    networks:
+      - traefik
+    restart: unless-stopped
+    depends_on:
+      - topgun-services
+
+volumes:
+  postgres_data:
+  redis_data:
+  mosquitto_data:
+  mosquitto_logs:
+  traefik_letsencrypt:

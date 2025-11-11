@@ -1,0 +1,53 @@
+app:
+  name: "topgun-services"
+  env: "development"
+  port:
+    http: 8080
+    https: 8443
+  path:
+    cert: "./internal/assets/dev/tls/dev.crt"
+    priv: "./internal/assets/dev/tls/dev.key"
+    ca: "./internal/assets/dev/tls/rootCA.crt"
+    log: "./log"
+    image: "./uploads/images"
+    file: "./uploads/files"
+  frontend:
+    base_url: "localhost:4200"
+
+db:
+  mariadb:
+    sock: "/var/run/mysqld/mysqld.sock"
+    host: "localhost"
+    port: 3306
+    username: ""
+    password: ""
+    db_name: ""
+    conn:
+      min: 1
+      max: 2
+  postgres:
+    sock: "/var/run/postgresql"
+    host: "localhost"
+    # host: "localhost"
+    port: 15432
+    username: "postgres"
+    password: "cn16022547"
+    db_name: "postgres"
+    conn:
+      min: 1
+      max: 2
+  sqlite:
+    db_name: "internal/assets/dev/log.sqlite"
+  redis:
+    host: ""
+    # host: "localhost"
+    port: 12006
+    username: ""
+    password: ""
+    db_name: 0
+    minute: 5
+jwt:
+  # openssl ecparam -name prime256v1 -genkey -noout -out privkey.pem
+  private: "./internal/assets/dev/jwt/privkey.pem"
+  # openssl ec -in privkey.pem -pubout -out pubkey.pem
+  public: "./internal/assets/dev/jwt/pubkey.pem"

@@ -1,0 +1,536 @@
+definitions:
+  models.Camera:
+    properties:
+      id:
+        type: string
+      institute:
+        type: string
+      location:
+        type: string
+      name:
+        type: string
+      token:
+        type: string
+    type: object
+  models.Detect:
+    properties:
+      camera:
+        $ref: '#/definitions/models.Camera'
+      camera_id:
+        type: string
+      id:
+        type: integer
+      path:
+        type: string
+    type: object
+  models.LoginRequest:
+    properties:
+      email:
+        type: string
+      password:
+        type: string
+    type: object
+  models.ResetPasswordRequest:
+    properties:
+      new_password:
+        minLength: 6
+        type: string
+      old_password:
+        type: string
+    required:
+    - new_password
+    - old_password
+    type: object
+  models.User:
+    properties:
+      email:
+        type: string
+      first_name:
+        type: string
+      first_name_en:
+        type: string
+      last_name:
+        type: string
+      last_name_en:
+        type: string
+      password:
+        type: string
+      title:
+        type: string
+      title_en:
+        type: string
+    type: object
+  models.VerifyTokenAndResetPasswordRequest:
+    properties:
+      password:
+        type: string
+      token:
+        type: string
+    type: object
+info:
+  contact: {}
+  title: KKU GS ADMISSION SERVICES API
+paths:
+  /api/v1/auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Login a user
+      parameters:
+      - description: Login Request
+        in: body
+        name: login
+        required: true
+        schema:
+          $ref: '#/definitions/models.LoginRequest'
+      produces:
+      - application/json
+      responses: {}
+      summary: Login
+      tags:
+      - Auth
+  /api/v1/auth/register:
+    post:
+      consumes:
+      - application/json
+      description: Register a new user
+      parameters:
+      - description: User
+        in: body
+        name: user
+        required: true
+        schema:
+          $ref: '#/definitions/models.User'
+      produces:
+      - application/json
+      responses: {}
+      summary: Register
+      tags:
+      - Auth
+  /api/v1/auth/reset-password:
+    post:
+      consumes:
+      - application/json
+      description: Reset user password with old and new password
+      parameters:
+      - description: Reset Password Request
+        in: body
+        name: resetPassword
+        required: true
+        schema:
+          $ref: '#/definitions/models.ResetPasswordRequest'
+      produces:
+      - application/json
+      responses: {}
+      security:
+      - ApiKeyAuth: []
+      summary: Reset Password
+      tags:
+      - Auth
+  /api/v1/auth/reset-password/{email}/issue-token:
+    post:
+      consumes:
+      - application/json
+      description: Issue token for email verification
+      parameters:
+      - description: Email
+        in: path
+        name: email
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses: {}
+      summary: Issue token for email verification
+      tags:
+      - Auth
+  /api/v1/auth/reset-password/verify:
+    post:
+      consumes:
+      - application/json
+      description: Verify token and reset password
+      parameters:
+      - description: VerifyTokenAndResetPasswordRequest
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.VerifyTokenAndResetPasswordRequest'
+      produces:
+      - application/json
+      responses: {}
+      summary: Verify token and reset password
+      tags:
+      - Auth
+  /api/v1/camera/:
+    get:
+      consumes:
+      - application/json
+      description: Get list of cameras with pagination and search
+      parameters:
+      - description: Page number
+        in: query
+        name: page
+        type: integer
+      - description: Items per page
+        in: query
+        name: limit
+        type: integer
+      - description: Search term
+        in: query
+        name: search
+        type: string
+      produces:
+      - application/json
+      responses: {}
+      security:
+      - ApiKeyAuth: []
+      summary: GetCameras
+      tags:
+      - Camera
+    post:
+      consumes:
+      - application/json
+      description: Create a new camera
+      parameters:
+      - description: Camera object
+        in: body
+        name: camera
+        required: true
+        schema:
+          $ref: '#/definitions/models.Camera'
+      produces:
+      - application/json
+      responses: {}
+      security:
+      - ApiKeyAuth: []
+      summary: CreateCamera
+      tags:
+      - Camera
+  /api/v1/camera/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete a camera by ID
+      parameters:
+      - description: Camera ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses: {}
+      security:
+      - ApiKeyAuth: []
+      summary: DeleteCamera
+      tags:
+      - Camera
+    get:
+      consumes:
+      - application/json
+      description: Get a camera by ID
+      parameters:
+      - description: Camera ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses: {}
+      security:
+      - ApiKeyAuth: []
+      summary: GetCamera
+      tags:
+      - Camera
+    put:
+      consumes:
+      - application/json
+      description: Update an existing camera
+      parameters:
+      - description: Camera ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Camera object
+        in: body
+        name: camera
+        required: true
+        schema:
+          $ref: '#/definitions/models.Camera'
+      produces:
+      - application/json
+      responses: {}
+      security:
+      - ApiKeyAuth: []
+      summary: UpdateCamera
+      tags:
+      - Camera
+  /api/v1/detect/:
+    get:
+      consumes:
+      - application/json
+      description: Get a list of detects with pagination and filtering
+      parameters:
+      - description: Page number
+        in: query
+        name: page
+        type: integer
+      - description: Items per page
+        in: query
+        name: limit
+        type: integer
+      - description: Search filter
+        in: query
+        name: search
+        type: string
+      produces:
+      - application/json
+      responses: {}
+      security:
+      - ApiKeyAuth: []
+      summary: GetDetects
+      tags:
+      - Detect
+    post:
+      consumes:
+      - multipart/form-data
+      description: Create a new detect with file upload
+      parameters:
+      - description: Camera ID (UUID)
+        in: formData
+        name: camera_id
+        required: true
+        type: string
+      - description: Objects JSON array
+        in: formData
+        name: objects
+        type: string
+      - description: File to upload
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses: {}
+      security:
+      - ApiKeyAuth: []
+      summary: CreateDetect
+      tags:
+      - Detect
+  /api/v1/detect/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete a detect by ID
+      parameters:
+      - description: Detect ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses: {}
+      security:
+      - ApiKeyAuth: []
+      summary: DeleteDetect
+      tags:
+      - Detect
+    get:
+      consumes:
+      - application/json
+      description: Get a detect by ID
+      parameters:
+      - description: Detect ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses: {}
+      security:
+      - ApiKeyAuth: []
+      summary: GetDetect
+      tags:
+      - Detect
+    put:
+      consumes:
+      - application/json
+      description: Update an existing detect
+      parameters:
+      - description: Detect ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Detect object
+        in: body
+        name: detect
+        required: true
+        schema:
+          $ref: '#/definitions/models.Detect'
+      produces:
+      - application/json
+      responses: {}
+      security:
+      - ApiKeyAuth: []
+      summary: UpdateDetect
+      tags:
+      - Detect
+  /api/v1/detect/{id}/file:
+    get:
+      description: Download the file associated with a detect by ID
+      parameters:
+      - description: Detect ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/octet-stream
+      responses: {}
+      security:
+      - ApiKeyAuth: []
+      summary: GetDetectFile
+      tags:
+      - Detect
+  /api/v1/users/:
+    get:
+      consumes:
+      - application/json
+      description: Get users
+      parameters:
+      - default: 1
+        description: Page
+        in: query
+        name: page
+        type: integer
+      - default: 10
+        description: Per Page
+        in: query
+        name: per_page
+        type: integer
+      - description: Keyword
+        in: query
+        name: keyword
+        type: string
+      - default: '"first_name,last_name"'
+        description: Column
+        in: query
+        name: column
+        type: string
+      produces:
+      - application/json
+      responses: {}
+      security:
+      - ApiKeyAuth: []
+      summary: GetUsers
+      tags:
+      - User
+    post:
+      consumes:
+      - application/json
+      description: Create user
+      parameters:
+      - description: User
+        in: body
+        name: user
+        required: true
+        schema:
+          $ref: '#/definitions/models.User'
+      produces:
+      - application/json
+      responses: {}
+      security:
+      - ApiKeyAuth: []
+      summary: CreateUser
+      tags:
+      - User
+  /api/v1/users/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete user
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses: {}
+      security:
+      - ApiKeyAuth: []
+      summary: DeleteUser
+      tags:
+      - User
+    get:
+      consumes:
+      - application/json
+      description: Get user
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses: {}
+      security:
+      - ApiKeyAuth: []
+      summary: GetUser
+      tags:
+      - User
+    put:
+      consumes:
+      - application/json
+      description: Update user
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: User
+        in: body
+        name: user
+        required: true
+        schema:
+          $ref: '#/definitions/models.User'
+      produces:
+      - application/json
+      responses: {}
+      security:
+      - ApiKeyAuth: []
+      summary: UpdateUser
+      tags:
+      - User
+  /api/v1/users/me:
+    get:
+      consumes:
+      - application/json
+      description: Get me
+      produces:
+      - application/json
+      responses: {}
+      security:
+      - ApiKeyAuth: []
+      summary: GetMe
+      tags:
+      - User
+schemes:
+- http
+- https
+securityDefinitions:
+  ApiKeyAuth:
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

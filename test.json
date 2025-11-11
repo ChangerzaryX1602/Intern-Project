@@ -1,0 +1,29 @@
+[
+        {
+          "obj_id": "obj_002",
+          "type": "drone",
+          "lat": "14.286169",
+          "lng": "101.171044",
+          "objective": "our",
+          "size": "large",
+          "details": null
+        },
+        {
+          "obj_id": "obj_001",
+          "type": "drone",
+          "lat": "14.287215",
+          "lng": "101.171600",
+          "objective": "our",
+          "size": "large",
+          "details": null
+        },
+        {
+          "obj_id": "obj_000",
+          "type": "drone",
+          "lat": "14.286958",
+          "lng": "101.170515",
+          "objective": "our",
+          "size": "medium",
+          "details": null
+        }
+    ]

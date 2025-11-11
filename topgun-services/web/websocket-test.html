@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Detection WebSocket Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        .container {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+        .connected { background: #d4edda; color: #155724; }
+        .disconnected { background: #f8d7da; color: #721c24; }
+        input, button {
+            padding: 10px;
+            margin: 5px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            cursor: pointer;
+        }
+        button:hover { background: #0056b3; }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .messages {
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            border-radius: 4px;
+            background: #f9f9f9;
+        }
+        .message {
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 4px;
+            background: white;
+            border-left: 4px solid #007bff;
+        }
+        .message pre {
+            margin: 5px 0;
+            overflow-x: auto;
+        }
+        .message img {
+            max-width: 100%;
+            height: auto;
+            margin: 10px 0;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+        .timestamp {
+            font-size: 0.8em;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔌 Detection WebSocket Client</h1>
+    
+    <div class="container">
+        <h2>Connection</h2>
+        <div id="status" class="status disconnected">Disconnected</div>
+        <input type="text" id="cameraId" placeholder="Enter Camera ID (UUID)" style="width: 300px;">
+        <button id="connectBtn" onclick="connect()">Connect</button>
+        <button id="disconnectBtn" onclick="disconnect()" disabled>Disconnect</button>
+    </div>
+
+    <div class="container">
+        <h2>Received Detections (<span id="count">0</span>)</h2>
+        <button onclick="clearMessages()">Clear Messages</button>
+        <div id="messages" class="messages"></div>
+    </div>
+
+    <script>
+        let ws = null;
+        let messageCount = 0;
+
+        function updateStatus(connected) {
+            const statusDiv = document.getElementById('status');
+            const connectBtn = document.getElementById('connectBtn');
+            const disconnectBtn = document.getElementById('disconnectBtn');
+            const cameraIdInput = document.getElementById('cameraId');
+
+            if (connected) {
+                statusDiv.textContent = 'Connected';
+                statusDiv.className = 'status connected';
+                connectBtn.disabled = true;
+                disconnectBtn.disabled = false;
+                cameraIdInput.disabled = true;
+            } else {
+                statusDiv.textContent = 'Disconnected';
+                statusDiv.className = 'status disconnected';
+                connectBtn.disabled = false;
+                disconnectBtn.disabled = true;
+                cameraIdInput.disabled = false;
+            }
+        }
+
+        function connect() {
+            const cameraId = document.getElementById('cameraId').value.trim();
+            if (!cameraId) {
+                alert('Please enter a Camera ID');
+                return;
+            }
+
+            // Connect to WebSocket
+            ws = new WebSocket('ws://localhost:8080/api/v1/detect/ws');
+
+            ws.onopen = () => {
+                console.log('WebSocket connected');
+                // Send camera_id to subscribe
+                ws.send(JSON.stringify({ camera_id: cameraId }));
+            };
+
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                console.log('Received:', data);
+
+                // Check if it's subscription confirmation
+                if (data.status === 'subscribed') {
+                    updateStatus(true);
+                    addMessage({
+                        type: 'system',
+                        message: `Subscribed to camera: ${data.camera_id}`
+                    });
+                } else {
+                    // It's a detection
+                    messageCount++;
+                    document.getElementById('count').textContent = messageCount;
+                    addMessage({
+                        type: 'detection',
+                        data: data
+                    });
+                }
+            };
+
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                addMessage({
+                    type: 'error',
+                    message: 'Connection error'
+                });
+            };
+
+            ws.onclose = () => {
+                console.log('WebSocket disconnected');
+                updateStatus(false);
+                addMessage({
+                    type: 'system',
+                    message: 'Disconnected from server'
+                });
+            };
+        }
+
+        function disconnect() {
+            if (ws) {
+                ws.close();
+                ws = null;
+            }
+        }
+
+        function addMessage(msg) {
+            const messagesDiv = document.getElementById('messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message';
+
+            const timestamp = new Date().toLocaleTimeString();
+            let content = '';
+
+            if (msg.type === 'system' || msg.type === 'error') {
+                content = `<div class="timestamp">${timestamp}</div><strong>${msg.message}</strong>`;
+            } else if (msg.type === 'detection') {
+                const imageTag = msg.data.image_data 
+                    ? `<img src="data:${msg.data.mime_type};base64,${msg.data.image_data}" alt="Detection Image">` 
+                    : '<em>No image available</em>';
+                
+                content = `
+                    <div class="timestamp">${timestamp}</div>
+                    ${imageTag}
+                    <strong>Detection ID:</strong> ${msg.data.id}<br>
+                    <strong>Camera ID:</strong> ${msg.data.camera_id}<br>
+                    <strong>Path:</strong> ${msg.data.path}<br>
+                    <strong>Timestamp:</strong> ${msg.data.timestamp}<br>
+                    <strong>Objects:</strong>
+                    <pre>${JSON.stringify(msg.data.objects, null, 2)}</pre>
+                `;
+            }
+
+            messageDiv.innerHTML = content;
+            messagesDiv.insertBefore(messageDiv, messagesDiv.firstChild);
+        }
+
+        function clearMessages() {
+            document.getElementById('messages').innerHTML = '';
+            messageCount = 0;
+            document.getElementById('count').textContent = '0';
+        }
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            if (ws) {
+                ws.close();
+            }
+        });
+    </script>
+</body>
+</html>

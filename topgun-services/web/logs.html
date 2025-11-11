@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-time Log Viewer - KKU GS Admission Services</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+        .log-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 2rem 0;
+            margin-bottom: 2rem;
+        }
+        .stats-card {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s;
+        }
+        .stats-card:hover {
+            transform: translateY(-2px);
+        }
+        .filter-panel {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            margin-bottom: 1rem;
+        }
+        .log-table-container {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .status-badge {
+            font-size: 0.8rem;
+            padding: 0.25rem 0.5rem;
+        }
+        .method-badge {
+            font-size: 0.7rem;
+            padding: 0.2rem 0.4rem;
+        }
+        .error-row {
+            background-color: #fff5f5 !important;
+        }
+        .auto-refresh-indicator {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+        .table-responsive {
+            max-height: 70vh;
+            overflow-y: auto;
+        }
+        .log-details {
+            white-space: nowrap;
+        }
+        .expandable {
+            cursor: pointer;
+        }
+        .expandable:hover {
+            background-color: #f1f3f5;
+        }
+    </style>
+</head>
+<body>
+    <!-- Auto Refresh Indicator -->
+    <div id="autoRefreshIndicator" class="auto-refresh-indicator">
+        <div class="alert alert-info alert-dismissible fade show" role="alert" style="display: none;">
+            <i class="bi bi-arrow-clockwise spin"></i> Auto-refreshing...
+        </div>
+    </div>
+
+    <!-- Header -->
+    <div class="log-header">
+        <div class="container">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <h1><i class="bi bi-file-text"></i> Real-time Log Viewer</h1>
+                    <p class="mb-0">KKU Graduate School Admission Services</p>
+                </div>
+                <div class="col-md-4 text-end">
+                    <div class="d-flex justify-content-end align-items-center gap-2">
+                        <button id="autoRefreshBtn" class="btn btn-light btn-sm">
+                            <i class="bi bi-arrow-clockwise"></i> Auto Refresh: OFF
+                        </button>
+                        <button id="refreshBtn" class="btn btn-light btn-sm">
+                            <i class="bi bi-arrow-clockwise"></i> Refresh
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container-fluid">
+        <!-- Stats Cards -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="stats-card p-3 text-center">
+                    <i class="bi bi-file-text text-primary fs-1"></i>
+                    <h4 class="mt-2 mb-1" id="totalLogs">0</h4>
+                    <small class="text-muted">Total Logs</small>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="stats-card p-3 text-center">
+                    <i class="bi bi-exclamation-triangle text-danger fs-1"></i>
+                    <h4 class="mt-2 mb-1" id="errorLogs">0</h4>
+                    <small class="text-muted">Error Logs</small>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="stats-card p-3 text-center">
+                    <i class="bi bi-calendar-day text-success fs-1"></i>
+                    <h4 class="mt-2 mb-1" id="todayLogs">0</h4>
+                    <small class="text-muted">Today's Logs</small>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="stats-card p-3 text-center">
+                    <i class="bi bi-router text-info fs-1"></i>
+                    <h4 class="mt-2 mb-1" id="uniqueIPs">0</h4>
+                    <small class="text-muted">Unique IPs</small>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <div class="stats-card p-3 text-center">
+                    <i class="bi bi-people text-warning fs-1"></i>
+                    <h4 class="mt-2 mb-1" id="uniqueUsers">0</h4>
+                    <small class="text-muted">Unique Users</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filter Panel -->
+        <div class="filter-panel p-3">
+            <h5><i class="bi bi-funnel"></i> Filters & Search</h5>
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label">Search</label>
+                    <input type="text" id="searchInput" class="form-control" placeholder="Search in all fields...">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Status Code</label>
+                    <select id="statusFilter" class="form-select">
+                        <option value="">All Status</option>
+                        <option value="200">200 (OK)</option>
+                        <option value="201">201 (Created)</option>
+                        <option value="400">400 (Bad Request)</option>
+                        <option value="401">401 (Unauthorized)</option>
+                        <option value="403">403 (Forbidden)</option>
+                        <option value="404">404 (Not Found)</option>
+                        <option value="500">500 (Server Error)</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Method</label>
+                    <select id="methodFilter" class="form-select">
+                        <option value="">All Methods</option>
+                        <option value="GET">GET</option>
+                        <option value="POST">POST</option>
+                        <option value="PUT">PUT</option>
+                        <option value="DELETE">DELETE</option>
+                        <option value="PATCH">PATCH</option>
+                        <option value="OPTIONS">OPTIONS</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">IP Address</label>
+                    <input type="text" id="ipFilter" class="form-control" placeholder="Filter by IP...">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">From Date</label>
+                    <input type="date" id="fromDateFilter" class="form-control">
+                </div>
+                <div class="col-md-1">
+                    <label class="form-label">To Date</label>
+                    <input type="date" id="toDateFilter" class="form-control">
+                </div>
+            </div>
+            <div class="row g-3 mt-2">
+                <div class="col-md-2">
+                    <label class="form-label">User ID</label>
+                    <input type="text" id="userIdFilter" class="form-control" placeholder="Filter by User ID...">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Has Error</label>
+                    <select id="hasErrorFilter" class="form-select">
+                        <option value="">All</option>
+                        <option value="true">With Errors</option>
+                        <option value="false">No Errors</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Page Size</label>
+                    <select id="pageSizeFilter" class="form-select">
+                        <option value="25">25</option>
+                        <option value="50" selected>50</option>
+                        <option value="100">100</option>
+                        <option value="250">250</option>
+                    </select>
+                </div>
+                <div class="col-md-6 d-flex align-items-end">
+                    <button id="applyFiltersBtn" class="btn btn-primary me-2">
+                        <i class="bi bi-search"></i> Apply Filters
+                    </button>
+                    <button id="clearFiltersBtn" class="btn btn-outline-secondary">
+                        <i class="bi bi-x-circle"></i> Clear All
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Log Table -->
+        <div class="log-table-container p-3">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5><i class="bi bi-table"></i> Access Logs</h5>
+                <div>
+                    <span id="logCount" class="badge bg-primary">Loading...</span>
+                </div>
+            </div>
+            
+            <div class="table-responsive">
+                <table id="logTable" class="table table-hover table-sm">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Time</th>
+                            <th>Status</th>
+                            <th>Method</th>
+                            <th>IP</th>
+                            <th>URL</th>
+                            <th>User ID</th>
+                            <th>Error</th>
+                        </tr>
+                    </thead>
+                    <tbody id="logTableBody">
+                        <tr>
+                            <td colspan="7" class="text-center">
+                                <div class="spinner-border" role="status">
+                                    <span class="visually-hidden">Loading...</span>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination -->
+            <nav aria-label="Log pagination">
+                <ul class="pagination justify-content-center" id="pagination">
+                    <!-- Pagination buttons will be inserted here -->
+                </ul>
+            </nav>
+        </div>
+    </div>
+
+    <!-- Log Detail Modal -->
+    <div class="modal fade" id="logDetailModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Log Details</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="logDetailContent">
+                    <!-- Detail content will be inserted here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script>
+        class LogViewer {
+            constructor() {
+                this.logs = [];
+                this.currentPage = 1;
+                this.pageSize = 50;
+                this.autoRefresh = false;
+                this.refreshInterval = null;
+                this.apiBase = '/api/v1/logs'; // Adjust this to match your API endpoint
+                
+                this.initializeEventListeners();
+                this.loadStats();
+                this.loadLogs();
+            }
+
+            initializeEventListeners() {
+                // Auto refresh toggle
+                $('#autoRefreshBtn').click(() => this.toggleAutoRefresh());
+                
+                // Manual refresh
+                $('#refreshBtn').click(() => this.loadLogs());
+                
+                // Filter application
+                $('#applyFiltersBtn').click(() => this.applyFilters());
+                
+                // Clear filters
+                $('#clearFiltersBtn').click(() => this.clearFilters());
+                
+                // Page size change
+                $('#pageSizeFilter').change(() => {
+                    this.pageSize = parseInt($('#pageSizeFilter').val());
+                    this.currentPage = 1;
+                    this.loadLogs();
+                });
+
+                // Enter key in search
+                $('#searchInput').keypress((e) => {
+                    if (e.which === 13) {
+                        this.applyFilters();
+                    }
+                });
+            }
+
+            toggleAutoRefresh() {
+                this.autoRefresh = !this.autoRefresh;
+                const btn = $('#autoRefreshBtn');
+                
+                if (this.autoRefresh) {
+                    btn.html('<i class="bi bi-arrow-clockwise"></i> Auto Refresh: ON');
+                    btn.removeClass('btn-light').addClass('btn-success');
+                    this.refreshInterval = setInterval(() => {
+                        this.loadLogs();
+                        this.showRefreshIndicator();
+                    }, 5000); // Refresh every 5 seconds
+                } else {
+                    btn.html('<i class="bi bi-arrow-clockwise"></i> Auto Refresh: OFF');
+                    btn.removeClass('btn-success').addClass('btn-light');
+                    if (this.refreshInterval) {
+                        clearInterval(this.refreshInterval);
+                    }
+                }
+            }
+
+            showRefreshIndicator() {
+                const indicator = $('#autoRefreshIndicator .alert');
+                indicator.show();
+                setTimeout(() => indicator.hide(), 1000);
+            }
+
+            async loadStats() {
+                try {
+                    const response = await fetch(`${this.apiBase}/stats`);
+                    const stats = await response.json();
+                    
+                    $('#totalLogs').text(this.formatNumber(stats.total_logs));
+                    $('#errorLogs').text(this.formatNumber(stats.error_logs));
+                    $('#todayLogs').text(this.formatNumber(stats.today_logs));
+                    $('#uniqueIPs').text(this.formatNumber(stats.unique_ips));
+                    $('#uniqueUsers').text(this.formatNumber(stats.unique_users));
+                } catch (error) {
+                    console.error('Failed to load stats:', error);
+                }
+            }
+
+            async loadLogs() {
+                try {
+                    const params = new URLSearchParams({
+                        page: this.currentPage,
+                        limit: this.pageSize
+                    });
+
+                    // Add filters
+                    const search = $('#searchInput').val();
+                    if (search) params.append('search', search);
+                    
+                    const status = $('#statusFilter').val();
+                    if (status) params.append('status', status);
+                    
+                    const method = $('#methodFilter').val();
+                    if (method) params.append('method', method);
+                    
+                    const ip = $('#ipFilter').val();
+                    if (ip) params.append('ip', ip);
+                    
+                    const userId = $('#userIdFilter').val();
+                    if (userId) params.append('user_id', userId);
+                    
+                    const fromDate = $('#fromDateFilter').val();
+                    if (fromDate) params.append('from_date', fromDate);
+                    
+                    const toDate = $('#toDateFilter').val();
+                    if (toDate) params.append('to_date', toDate);
+                    
+                    const hasError = $('#hasErrorFilter').val();
+                    if (hasError) params.append('has_error', hasError);
+
+                    const response = await fetch(`${this.apiBase}?${params}`);
+                    const data = await response.json();
+                    
+                    this.logs = data.data;
+                    this.renderLogs(this.logs);
+                    this.renderPagination(data);
+                    this.updateLogCount(data.total);
+                    
+                } catch (error) {
+                    console.error('Failed to load logs:', error);
+                    $('#logTableBody').html('<tr><td colspan="7" class="text-center text-danger">Failed to load logs</td></tr>');
+                }
+            }
+
+            renderLogs(logs) {
+                const tbody = $('#logTableBody');
+                tbody.empty();
+
+                if (logs.length === 0) {
+                    tbody.html('<tr><td colspan="7" class="text-center">No logs found</td></tr>');
+                    return;
+                }
+
+                logs.forEach(log => {
+                    const row = this.createLogRow(log);
+                    tbody.append(row);
+                });
+            }
+
+            createLogRow(log) {
+                const hasError = log.ErrorMsg && log.ErrorMsg.length > 0;
+                const rowClass = hasError ? 'error-row' : '';
+                
+                return `
+                    <tr class="${rowClass} expandable" onclick="logViewer.showLogDetail(${log.ID})">
+                        <td>${this.formatDateTime(log.At)}</td>
+                        <td>${this.getStatusBadge(log.Status)}</td>
+                        <td>${this.getMethodBadge(log.Method)}</td>
+                        <td><code>${log.IP}</code></td>
+                        <td class="log-details" title="${log.URL}">${log.URL}</td>
+                        <td><small>${log.UserID === '00000000-0000-0000-0000-000000000000' ? '-' : log.UserID}</small></td>
+                        <td>${hasError ? `<span class="text-danger">${log.ErrorMsg}</span>` : ''}</td>
+                    </tr>
+                `;
+            }
+
+            showLogDetail(logId) {
+                const log = this.logs.find(l => l.ID === logId);
+
+                if (log) {
+                    const modalContent = this.createLogDetailContent(log);
+                    $('#logDetailContent').html(modalContent);
+                    
+                    const modal = new bootstrap.Modal(document.getElementById('logDetailModal'));
+                    modal.show();
+                } else {
+                    console.error(`Log with ID ${logId} not found in current page data.`);
+                    alert('Could not find log details. The data might be outdated, please refresh.');
+                }
+            }
+
+            createLogDetailContent(log) {
+                return `
+                    <div class="row">
+                        <div class="col-md-6">
+                            <strong>ID:</strong> ${log.ID}<br>
+                            <strong>Timestamp:</strong> ${this.formatDateTime(log.At)}<br>
+                            <strong>Status:</strong> ${this.getStatusBadge(log.Status)}<br>
+                            <strong>Method:</strong> ${this.getMethodBadge(log.Method)}<br>
+                            <strong>IP Address:</strong> <code>${log.IP}</code><br>
+                            <strong>Host:</strong> ${log.Host}<br>
+                        </div>
+                        <div class="col-md-6">
+                            <strong>User ID:</strong> ${log.UserID === '00000000-0000-0000-0000-000000000000' ? 'Anonymous' : log.UserID}<br>
+                            <strong>Bytes Received:</strong> ${this.formatBytes(log.BytesRecv)}<br>
+                            <strong>Bytes Sent:</strong> ${this.formatBytes(log.BytesSent)}<br>
+                            <strong>Referer:</strong> ${log.Referer || 'N/A'}<br>
+                        </div>
+                    </div>
+                    <hr>
+                    <div class="mb-3">
+                        <strong>URL:</strong><br>
+                        <code class="d-block p-2 bg-light">${log.URL}</code>
+                    </div>
+                    <div class="mb-3">
+                        <strong>User Agent:</strong><br>
+                        <code class="d-block p-2 bg-light">${log.UserAgent}</code>
+                    </div>
+                    ${log.Authorization ? `
+                    <div class="mb-3">
+                        <strong>Authorization:</strong><br>
+                        <code class="d-block p-2 bg-light">${log.Authorization.substring(0, 50)}...</code>
+                    </div>
+                    ` : ''}
+                    ${log.ErrorMsg ? `
+                    <div class="mb-3">
+                        <strong>Error Message:</strong><br>
+                        <div class="alert alert-danger">${log.ErrorMsg}</div>
+                    </div>
+                    ` : ''}
+                `;
+            }
+
+            renderPagination(data) {
+                const pagination = $('#pagination');
+                pagination.empty();
+
+                if (data.total_pages <= 1) return;
+
+                // Previous button
+                if (data.page > 1) {
+                    pagination.append(`
+                        <li class="page-item">
+                            <a class="page-link" href="#" onclick="logViewer.goToPage(${data.page - 1})">Previous</a>
+                        </li>
+                    `);
+                }
+
+                // Page numbers
+                for (let i = Math.max(1, data.page - 2); i <= Math.min(data.total_pages, data.page + 2); i++) {
+                    const activeClass = i === data.page ? 'active' : '';
+                    pagination.append(`
+                        <li class="page-item ${activeClass}">
+                            <a class="page-link" href="#" onclick="logViewer.goToPage(${i})">${i}</a>
+                        </li>
+                    `);
+                }
+
+                // Next button
+                if (data.page < data.total_pages) {
+                    pagination.append(`
+                        <li class="page-item">
+                            <a class="page-link" href="#" onclick="logViewer.goToPage(${data.page + 1})">Next</a>
+                        </li>
+                    `);
+                }
+            }
+
+            goToPage(page) {
+                this.currentPage = page;
+                this.loadLogs();
+            }
+
+            applyFilters() {
+                this.currentPage = 1;
+                this.loadLogs();
+            }
+
+            clearFilters() {
+                $('#searchInput').val('');
+                $('#statusFilter').val('');
+                $('#methodFilter').val('');
+                $('#ipFilter').val('');
+                $('#userIdFilter').val('');
+                $('#fromDateFilter').val('');
+                $('#toDateFilter').val('');
+                $('#hasErrorFilter').val('');
+                this.currentPage = 1;
+                this.loadLogs();
+            }
+
+            updateLogCount(total) {
+                $('#logCount').text(`${this.formatNumber(total)} logs`);
+            }
+
+            getStatusBadge(status) {
+                let className = 'bg-secondary';
+                if (status >= 200 && status < 300) className = 'bg-success';
+                else if (status >= 300 && status < 400) className = 'bg-info';
+                else if (status >= 400 && status < 500) className = 'bg-warning';
+                else if (status >= 500) className = 'bg-danger';
+                
+                return `<span class="badge status-badge ${className}">${status}</span>`;
+            }
+
+            getMethodBadge(method) {
+                const colors = {
+                    'GET': 'bg-primary',
+                    'POST': 'bg-success',
+                    'PUT': 'bg-warning',
+                    'DELETE': 'bg-danger',
+                    'PATCH': 'bg-info',
+                    'OPTIONS': 'bg-secondary'
+                };
+                const className = colors[method] || 'bg-secondary';
+                return `<span class="badge method-badge ${className}">${method}</span>`;
+            }
+
+            formatDateTime(dateString) {
+                const date = new Date(dateString);
+                return date.toLocaleString('th-TH', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit'
+                });
+            }
+
+            formatBytes(bytes) {
+                if (bytes === 0) return '0 B';
+                const k = 1024;
+                const sizes = ['B', 'KB', 'MB', 'GB'];
+                const i = Math.floor(Math.log(bytes) / Math.log(k));
+                return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+            }
+
+            formatNumber(num) {
+                return new Intl.NumberFormat('th-TH').format(num);
+            }
+
+            truncate(str, length) {
+                if (!str) return '';
+                return str.length > length ? str.substring(0, length) + '...' : str;
+            }
+        }
+
+        // Initialize the log viewer
+        let logViewer;
+        $(document).ready(() => {
+            logViewer = new LogViewer();
+        });
+    </script>
+</body>
+</html>
