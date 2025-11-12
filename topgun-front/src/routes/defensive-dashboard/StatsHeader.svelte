@@ -45,7 +45,7 @@
 
 		<div class="flex items-center gap-6">
 			<!-- Server Time - Real-time display -->
-			<div class="flex items-center gap-2 px-4 py-2 bg-white/20 rounded-lg text-sm font-medium">
+			<div class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium">
 				<span class="text-lg">🕐</span>
 				<div>
 					<div class="text-xs opacity-75">Server Time</div>
@@ -54,9 +54,9 @@
 			</div>
 
 			<!-- Commander Info -->
-			<div class="flex items-center gap-2 px-4 py-2 bg-white/20 rounded-lg text-sm font-medium">
+			<div class="flex items-center gap-2 px-4 py-3 bg-white/20 rounded-lg text-sm font-medium">
 				<span class="text-lg">👨‍💼</span>
-				<span>ผู้บัญชาการ</span>
+				<span>commander</span>
 			</div>
 		</div>
 	</div>
