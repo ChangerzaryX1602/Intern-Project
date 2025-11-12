@@ -379,9 +379,37 @@
 			<div class="h-full bg-gray-300 w-[70%]">
 				<MapboxMap accessToken={mapboxToken} center={mapCenter} zoom={12} {markers} />
 			</div>
-			<div class="bg-white w-[30%] flex flex-col justify-start items-center px-4 py-4 gap-4 border-b border-gray-200"> 
-				<label for="file-upload" class="block text-sm font-medium text-gray-700 w-full">ชื่อ model ที่ใช้อยู่ตอนนี้ <br>เลือกไฟล์ใหม่เพื่อ upload</label>
-				<input id="file-upload" type="file" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100" />
+			<div class="bg-white w-[30%] flex flex-col justify-start items-center px-4 py-4 gap-4 border-b border-gray-200">
+				<!-- Model Upload Section -->
+				<div class="w-full">
+					<div class="bg-gradient-to-r from-indigo-50 to-blue-50 rounded-lg p-4 mb-3">
+						<div class="flex items-center gap-2 mb-2">
+							<span class="text-2xl">🤖</span>
+							<div>
+								<h3 class="font-bold text-gray-800 text-sm">Current Model</h3>
+								<p class="text-xs text-gray-600">YOLO v8 NCNN Model 960</p>
+							</div>
+						</div>
+						<div class="bg-white rounded px-2 py-1.5 text-xs text-indigo-600 font-semibold">
+							✓ Ready to detect
+						</div>
+					</div>
+
+					<label for="file-upload" class="block text-sm font-semibold text-gray-700 mb-2">Upload New Model</label>
+					<div class="relative">
+						<input 
+							id="file-upload" 
+							type="file" 
+							accept=".pt,.onnx,.pb,.tflite"
+							class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" 
+						/>
+						<div class="flex items-center justify-center gap-2 px-4 py-3 bg-indigo-50 border-2 border-dashed border-indigo-300 rounded-lg hover:bg-indigo-100 hover:border-indigo-400 transition-all cursor-pointer">
+							<span class="text-lg">📦</span>
+							<span class="text-sm font-medium text-indigo-700">Select model file</span>
+						</div>
+						<p class="text-xs text-gray-500 mt-1.5 text-center">Supported: .pt, .onnx, .pb, .tflite</p>
+					</div>
+				</div>
 				
 				<div class="w-full border-t border-gray-200 pt-2">
 					<div class="flex justify-between items-center mb-3">
