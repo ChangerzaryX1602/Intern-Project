@@ -1152,7 +1152,7 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "acceleration": {
-                    "type": "number"
+                    "$ref": "#/definitions/models.Vector"
                 },
                 "distance": {
                     "type": "number"
@@ -1160,14 +1160,14 @@ const docTemplate = `{
                 "drone_id": {
                     "type": "string"
                 },
-                "function": {
-                    "type": "string"
-                },
                 "height": {
                     "type": "number"
                 },
                 "id": {
                     "type": "integer"
+                },
+                "landing": {
+                    "$ref": "#/definitions/models.Location"
                 },
                 "lat": {
                     "type": "number"
@@ -1178,8 +1178,14 @@ const docTemplate = `{
                 "status": {
                     "type": "string"
                 },
+                "target": {
+                    "$ref": "#/definitions/models.Location"
+                },
+                "time_left": {
+                    "type": "integer"
+                },
                 "velocity": {
-                    "type": "number"
+                    "$ref": "#/definitions/models.Vector"
                 }
             }
         },
@@ -1217,6 +1223,20 @@ const docTemplate = `{
                 },
                 "path": {
                     "type": "string"
+                }
+            }
+        },
+        "models.Location": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string"
+                },
+                "lat": {
+                    "type": "number"
+                },
+                "lng": {
+                    "type": "number"
                 }
             }
         },
@@ -1273,6 +1293,20 @@ const docTemplate = `{
                 },
                 "title_en": {
                     "type": "string"
+                }
+            }
+        },
+        "models.Vector": {
+            "type": "object",
+            "properties": {
+                "x": {
+                    "type": "number"
+                },
+                "y": {
+                    "type": "number"
+                },
+                "z": {
+                    "type": "number"
                 }
             }
         },

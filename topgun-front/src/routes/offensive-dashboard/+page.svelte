@@ -9,7 +9,19 @@
 	const API_URL = 'http://localhost:8080/api/v1/attack';
 	const DUMMY_CAMERA_ID = '00000000-0000-0000-0000-000000000000'; // UUID placeholder for attack data (not used for attack-ws)
 
-	// Attack data from WebSocket
+	// Attack data from WebSocket (updated to match new Go model)
+	interface Vector3 {
+		x: number;
+		y: number;
+		z: number;
+	}
+
+	interface TargetLocation {
+		lat: number;
+		lng: number;
+		target_destcription: string;
+	}
+
 	interface AttackData {
 		id: number;
 		drone_id: string;
@@ -17,10 +29,13 @@
 		lng: number;
 		height: number;
 		function: string;
-		acceleration: number;
-		velocity: number;
+		acceleration: Vector3; // Changed from number to Vector3
+		velocity: Vector3;     // Changed from number to Vector3
 		distance: number;
 		status: string;
+		time_left: number;          // New field
+		target?: TargetLocation;    // New field (optional)
+		land?: TargetLocation;      // New field (optional)
 		created_at: string;
 	}
 
@@ -38,9 +53,12 @@
 		gpsStatus: 'good' | 'loss';
 		lastUpdate: string;
 		height: number;
-		velocity: number;
-		acceleration: number;
+		velocity: Vector3;      // Changed to Vector3
+		acceleration: Vector3;  // Changed to Vector3
 		distance: number;
+		timeLeft: number;       // New field
+		target?: TargetLocation;  // New field
+		land?: TargetLocation;    // New field
 	}
 
 	// Grouped drone data
@@ -134,13 +152,13 @@
 			id: `${attack.drone_id}-${attack.id}`,
 			trackingId: attack.drone_id,
 			name: `Drone ID: ${attack.drone_id}`,
-			status: attack.status === 'good' ? 'connected' : 'disconnected',
+			status: attack.status.toLowerCase() === 'good' || attack.status.toLowerCase() === 'done' ? 'connected' : 'disconnected',
 			location: 'ภาคกลาง, กรุงเทพ',
 			coordinates: {
 				lat: attack.lat,
 				lng: attack.lng
 			},
-			gpsStatus: attack.status === 'good' ? 'good' : 'loss',
+			gpsStatus: attack.status.toLowerCase() === 'good' || attack.status.toLowerCase() === 'done' ? 'good' : 'loss',
 			lastUpdate: new Date(attack.created_at).toLocaleString('th-TH', {
 				year: 'numeric',
 				month: '2-digit',
@@ -152,7 +170,10 @@
 			height: attack.height,
 			velocity: attack.velocity,
 			acceleration: attack.acceleration,
-			distance: attack.distance
+			distance: attack.distance,
+			timeLeft: attack.time_left || 0,
+			target: attack.target,
+			land: attack.land
 		};
 	}
 
@@ -284,29 +305,85 @@
 		}
 	}
 
-	// Generate markers for all drones (for expanded groups)
-	let markers = $derived(
-		allDrones
-			.filter((d) => {
-				// Show only drones from expanded groups
-				const group = droneGroups.find((g) => g.droneId === d.trackingId);
-				return group?.isExpanded && d.status === 'connected';
-			})
-			.map((d) => ({
-				id: d.trackingId, // Use trackingId for line drawing
-				lngLat: [d.coordinates.lng, d.coordinates.lat] as [number, number],
+	// Generate markers for map: only start point (small colored marker) + latest point (drone sticker)
+	let markers = $derived.by(() => {
+		const out: Array<any> = [];
+
+		// For each group, if expanded, create two markers: start and latest
+		droneGroups.forEach((group) => {
+			if (!group.isExpanded) return;
+			if (!group.paths || group.paths.length === 0) return;
+
+			const color = getDroneColor(group.droneId);
+
+			// Start marker (first recorded path)
+			const start = group.paths[0];
+			out.push({
+				id: group.droneId,
+				kind: 'start',
+				lngLat: [start.coordinates.lng, start.coordinates.lat] as [number, number],
 				popup: `
 					<div style="font-size:13px">
-						<strong>${d.name}</strong><br/>
-						${d.location}<br/>
-						Height: ${d.height}m<br/>
-						Velocity: ${d.velocity} km/h<br/>
-						GPS: ${d.gpsStatus === 'good' ? '✓ Connected' : '✗ Loss'}<br/>
-						${d.lastUpdate}
+						<strong>${group.name} (start)</strong><br/>
+						${start.location}<br/>
+						${start.lastUpdate}
 					</div>`,
-				color: getDroneColor(d.trackingId) // Use random color per drone_id
-			}))
-	);
+				color
+			});
+
+			// Latest marker (latest path) - rendered as drone sticker
+			const latest = group.paths[group.paths.length - 1];
+			const velocityMag = Math.sqrt(latest.velocity.x**2 + latest.velocity.y**2 + latest.velocity.z**2);
+			const accelerationMag = Math.sqrt(latest.acceleration.x**2 + latest.acceleration.y**2 + latest.acceleration.z**2);
+			out.push({
+				id: group.droneId,
+				kind: 'latest',
+				lngLat: [latest.coordinates.lng, latest.coordinates.lat] as [number, number],
+				popup: `
+					<div style="font-size:13px">
+						<strong>${group.name} (latest)</strong><br/>
+						${latest.location}<br/>
+						Height: ${latest.height.toFixed(2)}m<br/>
+						Velocity: ${velocityMag.toFixed(2)} m/s<br/>
+						Acceleration: ${accelerationMag.toFixed(2)} m/s²<br/>
+						Distance: ${latest.distance.toFixed(2)} m<br/>
+						Time Left: ${latest.timeLeft.toFixed(0)}s<br/>
+						GPS: ${latest.gpsStatus === 'good' ? '✓ Connected' : '✗ Loss'}<br/>
+						${latest.target ? `🎯 ${latest.target.target_destcription}<br/>` : ''}
+						${latest.lastUpdate}
+					</div>`,
+				color,
+				icon: 'drone'
+			});
+		});
+
+		return out;
+	});
+
+	// Generate path lines with ALL coordinates (not just start and latest)
+	let pathLines = $derived.by(() => {
+		const lines: Array<any> = [];
+
+		droneGroups.forEach((group) => {
+			if (!group.isExpanded) return;
+			if (!group.paths || group.paths.length < 2) return; // Need at least 2 points for a line
+
+			const color = getDroneColor(group.droneId);
+			
+			// Build full path coordinates array
+			const coordinates = group.paths.map(drone => 
+				[drone.coordinates.lng, drone.coordinates.lat] as [number, number]
+			);
+
+			lines.push({
+				id: group.droneId,
+				coordinates,
+				color
+			});
+		});
+
+		return lines;
+	});
 
 	// Filter drone groups based on search
 	let filteredGroups = $derived(
@@ -558,16 +635,38 @@
 											</div>
 											<div>
 												<span class="text-gray-600">ความสูง:</span>
-												<span class="font-medium text-gray-800 ml-1">{drone.height} ม.</span>
+												<span class="font-medium text-gray-800 ml-1">{drone.height.toFixed(2)} ม.</span>
 											</div>
 											<div>
 												<span class="text-gray-600">ความเร็ว:</span>
-												<span class="font-medium text-gray-800 ml-1">{drone.velocity} km/h</span>
+												<span class="font-medium text-gray-800 ml-1">{Math.sqrt(drone.velocity.x**2 + drone.velocity.y**2 + drone.velocity.z**2).toFixed(2)} m/s</span>
+											</div>
+											<div>
+												<span class="text-gray-600">ความเร่ง:</span>
+												<span class="font-medium text-gray-800 ml-1">{Math.sqrt(drone.acceleration.x**2 + drone.acceleration.y**2 + drone.acceleration.z**2).toFixed(2)} m/s²</span>
 											</div>
 											<div>
 												<span class="text-gray-600">ระยะทาง:</span>
-												<span class="font-medium text-gray-800 ml-1">{drone.distance} ม.</span>
+												<span class="font-medium text-gray-800 ml-1">{drone.distance.toFixed(2)} ม.</span>
 											</div>
+											<div>
+												<span class="text-gray-600">เวลาคงเหลือ:</span>
+												<span class="font-medium text-gray-800 ml-1">{drone.timeLeft.toFixed(0)} วินาที</span>
+											</div>
+											{#if drone.target}
+												<div class="col-span-2 mt-1 pt-1 border-t border-gray-200">
+													<span class="text-gray-600">🎯 Target:</span>
+													<span class="font-medium text-gray-800 ml-1">{drone.target.target_destcription}</span>
+													<span class="text-gray-500 ml-1 text-xs">({drone.target.lat.toFixed(4)}, {drone.target.lng.toFixed(4)})</span>
+												</div>
+											{/if}
+											{#if drone.land}
+												<div class="col-span-2">
+													<span class="text-gray-600">🛬 Landing:</span>
+													<span class="font-medium text-gray-800 ml-1">{drone.land.target_destcription}</span>
+													<span class="text-gray-500 ml-1 text-xs">({drone.land.lat.toFixed(4)}, {drone.land.lng.toFixed(4)})</span>
+												</div>
+											{/if}
 											<div class="col-span-2">
 												<span class="text-gray-600">เวลา:</span>
 												<span class="font-medium text-gray-800 ml-1">{drone.lastUpdate}</span>
@@ -585,7 +684,7 @@
 		<!-- Right Map Section -->
 		<section class="w-[70%] bg-white rounded-xl shadow-md overflow-hidden relative">
 			<div class="w-full h-full relative">
-				<MapboxMap accessToken={mapboxToken} center={mapCenter} zoom={13} {markers} drawLines={true} />
+				<MapboxMap accessToken={mapboxToken} center={mapCenter} zoom={17} {markers} {pathLines} />
 
 				<!-- Map Legend -->
 				<div class="absolute bottom-6 left-6 bg-white px-4 py-3 rounded-lg shadow-md z-5">

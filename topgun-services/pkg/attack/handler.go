@@ -95,8 +95,8 @@ func (h *attackHandler) GetAttacks() fiber.Handler {
 // @Router /api/v1/attack [post]
 func (h *attackHandler) CreateAttack() fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		var attack models.Attack
-		if err := c.BodyParser(&attack); err != nil {
+		var attackR models.AttackRequest
+		if err := c.BodyParser(&attackR); err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(helpers.ResponseForm{
 				Success: false,
 				Errors: []helpers.ResponseError{
@@ -109,6 +109,18 @@ func (h *attackHandler) CreateAttack() fiber.Handler {
 				},
 			})
 		}
+		var attack models.Attack
+		attack.TimeLeft = int(attackR.TimeLeft)
+		attack.Acceleration = attackR.Acceleration
+		attack.Distance = attackR.Distance
+		attack.DroneID = attackR.DroneID
+		attack.Height = attackR.Height
+		attack.Lat = attackR.Lat
+		attack.Lng = attackR.Lng
+		attack.Status = attackR.Status
+		attack.Velocity = attackR.Velocity
+		attack.Target = attackR.Target
+		attack.Landing = attackR.Landing
 		createdAttack, err := h.service.CreateAttack(attack)
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(helpers.ResponseForm{

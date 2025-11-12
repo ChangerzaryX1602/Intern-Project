@@ -1146,7 +1146,7 @@
             "type": "object",
             "properties": {
                 "acceleration": {
-                    "type": "number"
+                    "$ref": "#/definitions/models.Vector"
                 },
                 "distance": {
                     "type": "number"
@@ -1154,14 +1154,14 @@
                 "drone_id": {
                     "type": "string"
                 },
-                "function": {
-                    "type": "string"
-                },
                 "height": {
                     "type": "number"
                 },
                 "id": {
                     "type": "integer"
+                },
+                "landing": {
+                    "$ref": "#/definitions/models.Location"
                 },
                 "lat": {
                     "type": "number"
@@ -1172,8 +1172,14 @@
                 "status": {
                     "type": "string"
                 },
+                "target": {
+                    "$ref": "#/definitions/models.Location"
+                },
+                "time_left": {
+                    "type": "integer"
+                },
                 "velocity": {
-                    "type": "number"
+                    "$ref": "#/definitions/models.Vector"
                 }
             }
         },
@@ -1211,6 +1217,20 @@
                 },
                 "path": {
                     "type": "string"
+                }
+            }
+        },
+        "models.Location": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string"
+                },
+                "lat": {
+                    "type": "number"
+                },
+                "lng": {
+                    "type": "number"
                 }
             }
         },
@@ -1267,6 +1287,20 @@
                 },
                 "title_en": {
                     "type": "string"
+                }
+            }
+        },
+        "models.Vector": {
+            "type": "object",
+            "properties": {
+                "x": {
+                    "type": "number"
+                },
+                "y": {
+                    "type": "number"
+                },
+                "z": {
+                    "type": "number"
                 }
             }
         },

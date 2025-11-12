@@ -8,6 +8,14 @@
 		popup?: string;
 		color?: string;
 		id?: string; // For grouping markers with same ID
+		kind?: 'start' | 'latest'; // start = small colored marker, latest = drone sticker
+		icon?: string; // optional icon hint, e.g. 'drone'
+	};
+
+	type PathLine = {
+		id: string;
+		coordinates: [number, number][];
+		color: string;
 	};
 
 	type Props = {
@@ -17,7 +25,7 @@
 		style?: string;
 		class?: string;
 		markers?: MarkerConfig[];
-		drawLines?: boolean; // Enable drawing lines between markers with same ID
+		pathLines?: PathLine[]; // Full path coordinates for drawing lines
 	};
 
 	let {
@@ -27,7 +35,7 @@
 		style = 'mapbox://styles/mapbox/satellite-streets-v12',
 		class: className = '',
 		markers = [],
-		drawLines = false
+		pathLines = []
 	}: Props = $props();
 
 	let mapContainer: HTMLDivElement;
@@ -39,7 +47,7 @@
 
 	// Create arrow icon for direction indication
 	function createArrowIcon(color: string = '#10b981') {
-		const size = 80; // Increased from 40 to 80 for bigger arrows
+		const size = 70; // Reduced from 80 to ~27 (1/3 of original)
 		const canvas = document.createElement('canvas');
 		canvas.width = size;
 		canvas.height = size;
@@ -48,7 +56,7 @@
 		// Draw arrow pointing right (will be rotated by map)
 		ctx.fillStyle = color;
 		ctx.strokeStyle = color;
-		ctx.lineWidth = 3; // Thicker border
+		ctx.lineWidth = 1; // Thinner border (was 3)
 		
 		// Draw a triangular arrow
 		ctx.beginPath();
@@ -68,9 +76,9 @@
 
 	// Function to draw lines between markers with same ID
 	function drawPathLines() {
-		if (!map || !mapLoaded || !drawLines) return;
+		if (!map || !mapLoaded || !pathLines || pathLines.length === 0) return;
 
-		console.log('Drawing path lines for markers with same ID');
+		console.log('Drawing path lines:', pathLines.length);
 
 		// Remove existing arrow layer first
 		if (map.getLayer(LINE_LAYER_ID + '-arrows')) {
@@ -85,97 +93,72 @@
 			map.removeSource(LINE_SOURCE_ID);
 		}
 
-		// Group markers by ID
-		const markerGroups = new Map<string, MarkerConfig[]>();
-		markers.forEach((marker) => {
-			if (marker.id) {
-				if (!markerGroups.has(marker.id)) {
-					markerGroups.set(marker.id, []);
+		// Create line features from pathLines
+		const lineFeatures: any[] = pathLines.map((path) => {
+			const colorHex = path.color.replace('#', '');
+			const iconName = `arrow-icon-${colorHex}`;
+
+			return {
+				type: 'Feature',
+				properties: {
+					id: path.id,
+					color: path.color,
+					iconName: iconName
+				},
+				geometry: {
+					type: 'LineString',
+					coordinates: path.coordinates
 				}
-				markerGroups.get(marker.id)!.push(marker);
+			};
+		});
+
+		console.log(`Created ${lineFeatures.length} line features with full paths`);
+
+		// Add lines to map
+		map.addSource(LINE_SOURCE_ID, {
+			type: 'geojson',
+			data: {
+				type: 'FeatureCollection',
+				features: lineFeatures
 			}
 		});
 
-		console.log('Marker groups:', Array.from(markerGroups.entries()));
-
-		// Create line features for groups with more than 1 marker
-		const lineFeatures: any[] = [];
-		markerGroups.forEach((group, id) => {
-			if (group.length > 1) {
-				// Sort by timestamp if available, or maintain order
-				const coordinates = group.map((m) => m.lngLat);
-				const color = group[0].color || '#3b82f6';
-				
-				// Extract color hex without '#' for icon name
-				const colorHex = color.replace('#', '');
-				const iconName = `arrow-icon-${colorHex}`;
-				
-				lineFeatures.push({
-					type: 'Feature',
-					properties: {
-						id: id,
-						color: color,
-						iconName: iconName
-					},
-					geometry: {
-						type: 'LineString',
-						coordinates: coordinates
-					}
-				});
-				
-				console.log(`Created line for ID ${id} with ${coordinates.length} points, color: ${color}, icon: ${iconName}`);
+		// Add the line layer
+		map.addLayer({
+			id: LINE_LAYER_ID,
+			type: 'line',
+			source: LINE_SOURCE_ID,
+			layout: {
+				'line-join': 'round',
+				'line-cap': 'round'
+			},
+			paint: {
+				'line-color': ['get', 'color'],
+				'line-width': 3,
+				'line-opacity': 0.8
 			}
 		});
 
-		// Add lines to map if any exist
-		if (lineFeatures.length > 0) {
-			map.addSource(LINE_SOURCE_ID, {
-				type: 'geojson',
-				data: {
-					type: 'FeatureCollection',
-					features: lineFeatures
-				}
-			});
+		// Add arrow symbols layer on top of the line
+		map.addLayer({
+			id: LINE_LAYER_ID + '-arrows',
+			type: 'symbol',
+			source: LINE_SOURCE_ID,
+			layout: {
+				'symbol-placement': 'line',
+				'symbol-spacing': 50, // Adjusted spacing for smaller arrows
+				'icon-image': ['get', 'iconName'],
+				'icon-size': 0.8, // Reduced from 1.2 to 0.8 (smaller arrows)
+				'icon-rotation-alignment': 'map',
+				'icon-allow-overlap': true,
+				'icon-ignore-placement': true
+			},
+			paint: {
+				'icon-opacity': 0.9
+			}
+		});
 
-			// Add the line layer
-			map.addLayer({
-				id: LINE_LAYER_ID,
-				type: 'line',
-				source: LINE_SOURCE_ID,
-				layout: {
-					'line-join': 'round',
-					'line-cap': 'round'
-				},
-				paint: {
-					'line-color': ['get', 'color'],
-					'line-width': 3,
-					'line-opacity': 0.8
-				}
-			});
-
-			// Add arrow symbols layer on top of the line
-			map.addLayer({
-				id: LINE_LAYER_ID + '-arrows',
-				type: 'symbol',
-				source: LINE_SOURCE_ID,
-				layout: {
-					'symbol-placement': 'line',
-					'symbol-spacing': 120, // Increased spacing for bigger arrows
-					'icon-image': ['get', 'iconName'], // Use icon based on line color
-					'icon-size': 1.2, // Increased from 0.6 to 1.2 (doubled)
-					'icon-rotation-alignment': 'map',
-					'icon-allow-overlap': true,
-					'icon-ignore-placement': true
-				},
-				paint: {
-					'icon-opacity': 0.9
-				}
-			});
-
-			console.log(`Added ${lineFeatures.length} path lines with directional arrows to map`);
-		} else {
-			console.log('No groups with multiple markers found');
-		}
+		console.log(`Added ${lineFeatures.length} path lines with directional arrows to map`);
 	}
 
 	// Function to update markers
@@ -194,11 +177,41 @@
 		// Add new markers
 		markers.forEach((marker, index) => {
 			console.log(`Adding marker ${index}:`, marker);
-			const mapboxMarker = new mapboxgl.Marker({ color: marker.color || '#FF0000' })
-				.setLngLat(marker.lngLat);
+			let mapboxMarker: mapboxgl.Marker;
 
-			if (marker.popup) {
-				mapboxMarker.setPopup(new mapboxgl.Popup({ anchor: 'left' }).setHTML(marker.popup));
+			// Latest marker -> render as drone sticker (SVG) using DOM element
+			if (marker.kind === 'latest' || marker.icon === 'drone') {
+				const color = marker.color || '#3b82f6';
+				const el = document.createElement('div');
+				el.className = 'drone-sticker';
+				el.style.width = '36px';
+				el.style.height = '36px';
+				el.style.display = 'flex';
+				el.style.alignItems = 'center';
+				el.style.justifyContent = 'center';
+				el.style.pointerEvents = 'auto';
+				// Inline SVG airplane icon, colorized
+				const svg = `
+				<svg viewBox="0 0 24 24" width="28" height="28" xmlns="http://www.w3.org/2000/svg">
+				  <g fill="${color}">
+				    <path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9L2 14v2l8-1v3l-2 1v1l3-0.5L14 20v-1l-2-1v-3l9 1z" />
+				  </g>
+				</svg>`;
+				el.innerHTML = svg;
+
+				mapboxMarker = new mapboxgl.Marker({ element: el, anchor: 'center' })
+					.setLngLat(marker.lngLat);
+
+				if (marker.popup) {
+					mapboxMarker.setPopup(new mapboxgl.Popup({ anchor: 'top' }).setHTML(marker.popup));
+				}
+			} else {
+				// Default small colored marker for start points
+				mapboxMarker = new mapboxgl.Marker({ color: marker.color || '#FF0000' })
+					.setLngLat(marker.lngLat);
+				if (marker.popup) {
+					mapboxMarker.setPopup(new mapboxgl.Popup({ anchor: 'left' }).setHTML(marker.popup));
+				}
 			}
 
 			mapboxMarker.addTo(map!);
@@ -216,7 +229,7 @@
 				// Single marker: center on it with fixed zoom
 				map!.flyTo({
 					center: markers[0].lngLat,
-					zoom: 15,
+					zoom: 18, // Increased from 15 to 18 for closer zoom
 					duration: 1000
 				});
 			} else {
@@ -227,7 +240,7 @@
 				});
 				map!.fitBounds(bounds, {
 					padding: { top: 50, bottom: 50, left: 50, right: 50 },
-					maxZoom: 15,
+					maxZoom: 18, // Increased from 17 to 18 for closer zoom
 					duration: 1000
 				});
 			}
@@ -253,6 +266,14 @@
 		console.log('$effect triggered for markers:', markers.length, 'mapLoaded:', mapLoaded);
 		if (markers && mapLoaded) {
 			updateMarkers();
+		}
+	});
+
+	// Watch for pathLines changes and redraw
+	$effect(() => {
+		console.log('$effect triggered for pathLines:', pathLines?.length || 0, 'mapLoaded:', mapLoaded);
+		if (pathLines && mapLoaded) {
+			drawPathLines();
 		}
 	});
 
@@ -323,4 +344,16 @@
 		width: 100%;
 		height: 100%;
 	}
+
+/* Drone sticker marker styling */
+.drone-sticker svg {
+	filter: drop-shadow(0 2px 4px rgba(0,0,0,0.25));
+	border-radius: 6px;
+}
+
+.drone-sticker {
+	background: rgba(255,255,255,0.9);
+	border-radius: 8px;
+	padding: 2px;
+}
 </style>

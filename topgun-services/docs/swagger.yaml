@@ -2,25 +2,29 @@ definitions:
   models.Attack:
     properties:
       acceleration:
-        type: number
+        $ref: '#/definitions/models.Vector'
       distance:
         type: number
       drone_id:
-        type: string
-      function:
         type: string
       height:
         type: number
       id:
         type: integer
+      landing:
+        $ref: '#/definitions/models.Location'
       lat:
         type: number
       lng:
         type: number
       status:
         type: string
+      target:
+        $ref: '#/definitions/models.Location'
+      time_left:
+        type: integer
       velocity:
-        type: number
+        $ref: '#/definitions/models.Vector'
     type: object
   models.Camera:
     properties:
@@ -45,6 +49,15 @@ definitions:
         type: integer
       path:
         type: string
+    type: object
+  models.Location:
+    properties:
+      description:
+        type: string
+      lat:
+        type: number
+      lng:
+        type: number
     type: object
   models.LoginRequest:
     properties:
@@ -82,6 +95,15 @@ definitions:
         type: string
       title_en:
         type: string
+    type: object
+  models.Vector:
+    properties:
+      x:
+        type: number
+      "y":
+        type: number
+      z:
+        type: number
     type: object
   models.VerifyTokenAndResetPasswordRequest:
     properties:
