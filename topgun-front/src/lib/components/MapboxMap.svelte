@@ -24,7 +24,7 @@
 		accessToken,
 		center = [100.5018, 13.7563], 
 		zoom = 12,
-		style = 'mapbox://styles/mapbox/streets-v12',
+		style = 'mapbox://styles/mapbox/satellite-streets-v12',
 		class: className = '',
 		markers = [],
 		drawLines = false

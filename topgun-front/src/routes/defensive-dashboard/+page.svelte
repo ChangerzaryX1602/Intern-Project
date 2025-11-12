@@ -299,7 +299,7 @@
 	<title>Defensive Dashboard - Real-time Detection</title>
 </svelte:head>
 
-<div class="dashboard">
+<div class="w-screen h-screen flex flex-col bg-gray-100 overflow-hidden">
 	<!-- Header with Stats -->
 	<StatsHeader
 		selectedCamerasCount={selectedCameraIds.size}
@@ -309,7 +309,7 @@
 	/>
 
 	<!-- Main Content Layout: Camera Selector (30%) + Map (70%) -->
-	<main class="main-content">
+	<main class="flex gap-6 px-6 pt-6 pb-0 overflow-hidden flex-1">
 		<CameraSelector
 			{cameras}
 			{selectedCameraIds}
@@ -325,29 +325,31 @@
 			onPrevPage={loadPrevPage}
 		/>
 
-		<section class="map-section">
-			<div class="map-container">
+		<section class="w-[70%] bg-white rounded-xl shadow-md overflow-hidden relative xl:w-[65%]">
+			<div class="w-full h-full bg-gray-300">
 				<MapboxMap accessToken={mapboxToken} center={mapCenter} zoom={12} {markers} />
 			</div>
 		</section>
 	</main>
 
 	<!-- Bottom Horizontal Detection List -->
-	<footer class="detections-footer">
-		<div class="footer-header">
-			<h2>
-				<span class="icon">📋</span>
+	<footer class="bg-white border-t-2 border-gray-200 px-6 py-4 max-h-[220px] flex flex-col">
+		<div class="flex justify-between items-center mb-3">
+			<h2 class="m-0 text-lg flex items-center gap-2 text-gray-800 font-bold">
+				<span class="inline-block">📋</span>
 				All Detections
-				<span class="badge">{detections.length}</span>
+				<span class="bg-indigo-500 text-white px-2 py-0.5 rounded-xl text-xs font-semibold">
+					{detections.length}
+				</span>
 			</h2>
 		</div>
 
-		<div class="detections-horizontal">
+		<div class="flex gap-4 overflow-x-auto overflow-y-hidden py-2 flex-1 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 hover:scrollbar-thumb-gray-400">
 			{#if detections.length === 0}
-				<div class="empty-state-horizontal">
-					<div class="empty-icon">📷</div>
-					<p>No detections yet</p>
-					<small>Select cameras to start monitoring...</small>
+				<div class="flex flex-col items-center justify-center w-full p-8 text-center text-gray-400">
+					<div class="text-4xl mb-2 opacity-50">📷</div>
+					<p class="my-1 font-medium text-gray-600">No detections yet</p>
+					<small class="text-sm">Select cameras to start monitoring...</small>
 				</div>
 			{:else}
 				{#each detections as detection (detection.id)}
@@ -362,159 +364,3 @@
 		</div>
 	</footer>
 </div>
-
-<style>
-	:global(body) {
-		margin: 0;
-		font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
-			sans-serif;
-	}
-
-	.dashboard {
-		width: 100vw;
-		height: 100vh;
-		display: flex;
-		flex-direction: column;
-		background: #f5f7fa;
-		overflow: hidden;
-	}
-
-	/* Main Content - Camera Selector (30%) + Map (70%) */
-	.main-content {
-		display: flex;
-		gap: 1.5rem;
-		padding: 1.5rem;
-		padding-bottom: 0;
-		overflow: hidden;
-		flex: 1;
-	}
-
-	/* Right Map Section - 70% width */
-	.map-section {
-		width: 70%;
-		background: white;
-		border-radius: 12px;
-		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-		overflow: hidden;
-		position: relative;
-	}
-
-	.map-container {
-		width: 100%;
-		height: 100%;
-		background: #e5e7eb;
-	}
-
-	/* Bottom Horizontal Detection List */
-	.detections-footer {
-		background: white;
-		border-top: 2px solid #e5e7eb;
-		padding: 1rem 1.5rem;
-		max-height: 220px;
-		display: flex;
-		flex-direction: column;
-	}
-
-	.footer-header {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		margin-bottom: 0.75rem;
-	}
-
-	.footer-header h2 {
-		margin: 0;
-		font-size: 1.1rem;
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		color: #1f2937;
-		font-weight: 700;
-	}
-
-	.badge {
-		background: #667eea;
-		color: white;
-		padding: 0.125rem 0.5rem;
-		border-radius: 12px;
-		font-size: 0.75rem;
-		font-weight: 600;
-	}
-
-	/* Horizontal Scrollable Detection List */
-	.detections-horizontal {
-		display: flex;
-		gap: 1rem;
-		overflow-x: auto;
-		overflow-y: hidden;
-		padding: 0.5rem 0;
-		flex: 1;
-	}
-
-	.detections-horizontal::-webkit-scrollbar {
-		height: 8px;
-	}
-
-	.detections-horizontal::-webkit-scrollbar-track {
-		background: #f3f4f6;
-		border-radius: 4px;
-	}
-
-	.detections-horizontal::-webkit-scrollbar-thumb {
-		background: #d1d5db;
-		border-radius: 4px;
-	}
-
-	.detections-horizontal::-webkit-scrollbar-thumb:hover {
-		background: #9ca3af;
-	}
-
-	/* Empty State for Horizontal List */
-	.empty-state-horizontal {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-		width: 100%;
-		padding: 2rem;
-		text-align: center;
-		color: #9ca3af;
-	}
-
-	.empty-state-horizontal .empty-icon {
-		font-size: 2.5rem;
-		margin-bottom: 0.5rem;
-		opacity: 0.5;
-	}
-
-	.empty-state-horizontal p {
-		margin: 0.25rem 0;
-		font-weight: 500;
-		color: #6b7280;
-	}
-
-	.empty-state-horizontal small {
-		font-size: 0.85rem;
-	}
-
-	.icon {
-		display: inline-block;
-	}
-
-	/* Responsive */
-	@media (max-width: 1400px) {
-		.map-section {
-			width: 65%;
-		}
-	}
-
-	@media (max-width: 1024px) {
-		.main-content {
-			flex-direction: column;
-		}
-		.map-section {
-			width: 100%;
-			height: 400px;
-		}
-	}
-</style>

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import MapboxMap from '$lib/components/MapboxMap.svelte';
+	import SearchBox from '$lib/components/SearchBox.svelte';
 	import { env } from '$env/dynamic/public';
 
 	const mapboxToken = env.PUBLIC_MAPBOX_TOKEN || '';
@@ -127,92 +128,97 @@
 	<title>Offensive Dashboard - Drone Control</title>
 </svelte:head>
 
-<div class="dashboard">
+<div class="w-screen h-screen flex flex-col bg-gray-100 overflow-hidden">
 	<!-- Header -->
-	<header class="header">
-		<div class="header-content">
-			<div class="logo-section">
-				<!-- <div class="logo">🎯</div> -->
+	<header class="bg-gradient-to-br from-red-500 to-red-600 text-white px-8 py-6 shadow-lg z-10">
+		<div class="flex justify-between items-center">
+			<div class="flex items-center gap-4">
 				<div>
-					<h1>Offensive Dashboard</h1>
-					<p class="subtitle">Drone Control & Monitoring</p>
+					<h1 class="m-0 text-3xl font-bold">Offensive Dashboard</h1>
+					<p class="m-0 opacity-90 text-sm">Drone Control & Monitoring</p>
 				</div>
 			</div>
 
-			<div class="server-time">
-				<span class="time-label">Server Time:</span>
-				<span class="time-value">11/11/2025 19:02</span>
-				<span class="status-badge">🔴 LIVE</span>
+			<div class="flex items-center gap-4 px-6 py-2 bg-white/20 rounded-lg">
+				<span class="text-sm opacity-90">Server Time:</span>
+				<span class="text-lg font-bold">11/11/2025 19:02</span>
+				<span class="px-3 py-1 bg-white/30 rounded-xl text-xs font-semibold">🔴 LIVE</span>
 			</div>
 		</div>
 	</header>
 
 	<!-- Main Content -->
-	<main class="main-content">
+	<main class="flex gap-6 px-6 pt-6 flex-1 overflow-hidden">
 		<!-- Left Sidebar - Drone List -->
-		<aside class="sidebar">
+		<aside class="w-[30%] bg-white rounded-xl shadow-md flex flex-col overflow-hidden">
 			<!-- Search -->
-			<div class="search-section">
-				<input
-					type="text"
-					bind:value={searchQuery}
-					placeholder="ค้นหา Drone"
-					class="search-input"
-				/>
-				<button class="search-btn">🔍</button>
-			</div>
+			<SearchBox
+				bind:value={searchQuery}
+				placeholder="ค้นหา Drone"
+				label="🔍 ค้นหา Drone"
+				onSearch={() => {}}
+			/>
 
 			<!-- Drone List Header -->
-			<div class="list-header">
-				<h2>ทั้งหมด {drones.length} ตัว</h2>
+			<div class="px-5 py-4 border-b border-gray-200">
+				<h2 class="m-0 text-lg text-gray-800 font-bold">ทั้งหมด {drones.length} ตัว</h2>
 			</div>
 
 			<!-- Drone Cards -->
-			<div class="drone-list">
+			<div class="flex-1 overflow-y-auto p-3 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 hover:scrollbar-thumb-gray-400">
 				{#each filteredDrones as drone (drone.id)}
 					<div
-						class="drone-card"
-						class:selected={selectedDrone?.id === drone.id}
-						class:connected={drone.status === 'connected'}
-						class:disconnected={drone.status === 'disconnected'}
+						class="flex flex-col p-4 rounded-lg border-2 bg-white mb-3 cursor-pointer transition-all duration-200 hover:bg-gray-50 hover:border-gray-300 hover:translate-x-0.5"
+						class:drone-selected={selectedDrone?.id === drone.id}
+						class:border-gray-200={selectedDrone?.id !== drone.id}
+						class:border-l-4={drone.status === 'connected' || drone.status === 'disconnected'}
+						class:border-l-green-500={drone.status === 'connected'}
+						class:border-l-red-500={drone.status === 'disconnected'}
+						class:opacity-70={drone.status === 'disconnected'}
 						onclick={() => selectDrone(drone)}
 						role="button"
 						tabindex="0"
 						onkeydown={(e) => e.key === 'Enter' && selectDrone(drone)}
 					>
-						<div class="drone-header">
-							<span class="drone-id">{drone.name}</span>
+						<div class="flex justify-between items-center mb-3">
+							<span class="text-base font-bold text-gray-800">{drone.name}</span>
 							<button
-								class="status-badge"
-								class:connected={drone.status === 'connected'}
-								class:disconnected={drone.status === 'disconnected'}
+								class="px-3 py-1 rounded-xl text-xs font-semibold flex items-center gap-1.5 border-none cursor-pointer transition-all duration-200 hover:scale-105"
+								class:bg-green-100={drone.status === 'connected'}
+								class:text-green-800={drone.status === 'connected'}
+								class:bg-red-100={drone.status === 'disconnected'}
+								class:text-red-800={drone.status === 'disconnected'}
 								onclick={(e) => {
 									e.stopPropagation();
 									toggleDroneStatus(drone.id);
 								}}
 							>
+								<span
+									class="w-2 h-2 rounded-full"
+									class:bg-green-500={drone.status === 'connected'}
+									class:animate-pulse-slow={drone.status === 'connected'}
+									class:bg-red-500={drone.status === 'disconnected'}
+								></span>
 								{#if drone.status === 'connected'}
-									<span class="status-dot connected"></span>
 									Connect
 								{:else}
-									<span class="status-dot disconnected"></span>
 									Disconnect
 								{/if}
 							</button>
 						</div>
 
-						<div class="drone-info">
-							<div class="info-row">
-								<span class="label">ปลายทาง:</span>
-								<span class="value">{drone.location}</span>
+						<div class="flex flex-col gap-1">
+							<div class="flex gap-2 text-sm">
+								<span class="text-gray-600 min-w-[80px]">ปลายทาง:</span>
+								<span class="text-gray-800 font-medium">{drone.location}</span>
 							</div>
-							<div class="info-row">
-								<span class="label">ชุดบุกค้า:</span>
-								<span class="value">ภาคกลาง, กรุงเทพ</span>
+							<div class="flex gap-2 text-sm">
+								<span class="text-gray-600 min-w-[80px]">ชุดบุกค้า:</span>
+								<span class="text-gray-800 font-medium">ภาคกลาง, กรุงเทพ</span>
 							</div>
-							<div class="info-row">
-								<span class="label">เวลาทรง:</span>
-								<span class="value">{drone.lastUpdate}</span>
+							<div class="flex gap-2 text-sm">
+								<span class="text-gray-600 min-w-[80px]">เวลาทรง:</span>
+								<span class="text-gray-800 font-medium">{drone.lastUpdate}</span>
 							</div>
 						</div>
 					</div>
@@ -221,51 +227,62 @@
 		</aside>
 
 		<!-- Right Map Section -->
-		<section class="map-section">
-			<div class="map-container">
+		<section class="w-[70%] bg-white rounded-xl shadow-md overflow-hidden relative">
+			<div class="w-full h-full relative">
 				<MapboxMap accessToken={mapboxToken} center={mapCenter} zoom={13} {markers} drawLines={true} />
 
 				<!-- Map Legend -->
-				<div class="map-legend">
-					<div class="legend-item">
-						<span class="legend-marker gps"></span>
-						<span class="legend-text">สัญญาณ GPS</span>
+				<div class="absolute bottom-6 left-6 bg-white px-4 py-3 rounded-lg shadow-md z-[5]">
+					<div class="flex items-center gap-2 mb-2">
+						<span class="w-3 h-3 rounded-full border-2 border-white shadow-md bg-green-500"></span>
+						<span class="text-sm text-gray-700">สัญญาณ GPS</span>
 					</div>
-					<div class="legend-item">
-						<span class="legend-marker gps-loss"></span>
-						<span class="legend-text">ไม่มีสัญญาณ GPS</span>
+					<div class="flex items-center gap-2 mb-2">
+						<span class="w-3 h-3 rounded-full border-2 border-white shadow-md bg-red-500"></span>
+						<span class="text-sm text-gray-700">ไม่มีสัญญาณ GPS</span>
 					</div>
-					<div class="legend-item">
-						<span class="legend-line-sample gps"></span>
-						<span class="legend-text">เส้นทางเคลื่อนที่ (ID ซ้ำ)</span>
+					<div class="flex items-center gap-2">
+						<span class="w-[30px] h-[3px] rounded bg-green-500"></span>
+						<span class="text-sm text-gray-700">เส้นทางเคลื่อนที่ (ID ซ้ำ)</span>
 					</div>
 				</div>
 			</div>
 
 			<!-- Selected Drone Info Popup -->
 			{#if selectedDrone && selectedDrone.status === 'connected'}
-				<div class="drone-popup">
-					<button class="close-btn" onclick={() => (selectedDrone = null)}>✕</button>
-					<h3>{selectedDrone.id}</h3>
-					<div class="popup-info">
-						<div class="popup-row">
-							<span class="popup-label">ภาคกลาง</span>
+				<div class="absolute top-6 right-6 w-[300px] bg-white rounded-xl shadow-xl p-6 z-10 border-2 border-red-500">
+					<button
+						class="absolute top-3 right-3 w-7 h-7 border-none bg-gray-100 rounded-full cursor-pointer flex items-center justify-center text-base text-gray-600 transition-all duration-200 hover:bg-gray-200 hover:text-gray-800"
+						onclick={() => (selectedDrone = null)}
+					>
+						✕
+					</button>
+					<h3 class="m-0 mb-4 text-2xl text-red-500 font-bold">{selectedDrone.id}</h3>
+					<div class="flex flex-col gap-2">
+						<div class="flex items-center gap-2 text-sm">
+							<span class="text-gray-600">ภาคกลาง</span>
 						</div>
-						<div class="popup-row">
-							<span class="popup-label">กรุงเทพ</span>
+						<div class="flex items-center gap-2 text-sm">
+							<span class="text-gray-600">กรุงเทพ</span>
 						</div>
-						<div class="popup-row">
-							<span class="popup-label">เวลาทรงหนารถอาวุธ:</span>
+						<div class="flex items-center gap-2 text-sm">
+							<span class="text-gray-600">เวลาทรงหนารถอาวุธ:</span>
 						</div>
-						<div class="popup-row">
-							<span class="popup-label">หมิงตอแผน:</span>
+						<div class="flex items-center gap-2 text-sm">
+							<span class="text-gray-600">หมิงตอแผน:</span>
 						</div>
-						<div class="popup-row">
-							<span class="popup-label">กรุงเทพ</span>
+						<div class="flex items-center gap-2 text-sm">
+							<span class="text-gray-600">กรุงเทพ</span>
 						</div>
-						<div class="popup-row">
-							<span class="popup-value-large">{selectedDrone.id}</span>
-							<span class="gps-badge" class:good={selectedDrone.gpsStatus === 'good'}>
+						<div class="flex items-center gap-2 text-sm">
+							<span class="text-xl font-bold text-gray-800">{selectedDrone.id}</span>
+							<span
+								class="px-3 py-1 rounded-xl text-xs font-semibold ml-auto"
+								class:bg-green-100={selectedDrone.gpsStatus === 'good'}
+								class:text-green-800={selectedDrone.gpsStatus === 'good'}
+								class:bg-red-100={selectedDrone.gpsStatus !== 'good'}
+								class:text-red-800={selectedDrone.gpsStatus !== 'good'}
+							>
 								GPS {selectedDrone.gpsStatus === 'good' ? 'Connect' : 'Loss'}
 							</span>
 						</div>
@@ -277,277 +294,13 @@
 </div>
 
 <style>
-	:global(body) {
-		margin: 0;
-		font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
-			sans-serif;
-	}
-
-	.dashboard {
-		width: 100vw;
-		height: 100vh;
-		display: flex;
-		flex-direction: column;
-		background: #f5f7fa;
-		overflow: hidden;
-	}
-
-	/* Header */
-	.header {
-		background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);
-		color: white;
-		padding: 1.5rem 2rem;
-		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-		z-index: 10;
-	}
-
-	.header-content {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-	}
-
-	.logo-section {
-		display: flex;
-		align-items: center;
-		gap: 1rem;
-	}
-
-	.logo {
-		font-size: 3rem;
-		animation: pulse-rotate 3s ease-in-out infinite;
-	}
-
-	@keyframes pulse-rotate {
-		0%,
-		100% {
-			transform: scale(1) rotate(0deg);
-		}
-		50% {
-			transform: scale(1.1) rotate(5deg);
-		}
-	}
-
-	.logo-section h1 {
-		margin: 0;
-		font-size: 1.75rem;
-		font-weight: 700;
-	}
-
-	.subtitle {
-		margin: 0;
-		opacity: 0.9;
-		font-size: 0.9rem;
-	}
-
-	.server-time {
-		display: flex;
-		align-items: center;
-		gap: 1rem;
-		padding: 0.5rem 1.5rem;
-		background: rgba(255, 255, 255, 0.2);
-		border-radius: 8px;
-	}
-
-	.time-label {
-		font-size: 0.85rem;
-		opacity: 0.9;
-	}
-
-	.time-value {
-		font-size: 1.1rem;
-		font-weight: 700;
-	}
-
-	.status-badge {
-		padding: 0.25rem 0.75rem;
-		background: rgba(255, 255, 255, 0.3);
-		border-radius: 12px;
-		font-size: 0.8rem;
-		font-weight: 600;
-	}
-
-	/* Main Content */
-	.main-content {
-		display: flex;
-		gap: 1.5rem;
-		padding: 1.5rem;
-		flex: 1;
-		overflow: hidden;
-	}
-
-	/* Left Sidebar */
-	.sidebar {
-		width: 30%;
-		background: white;
-		border-radius: 12px;
-		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-		display: flex;
-		flex-direction: column;
-		overflow: hidden;
-	}
-
-	.search-section {
-		padding: 1.25rem;
-		border-bottom: 1px solid #e5e7eb;
-		display: flex;
-		gap: 0.5rem;
-	}
-
-	.search-input {
-		flex: 1;
-		padding: 0.75rem 1rem;
-		border: 2px solid #e5e7eb;
-		border-radius: 8px;
-		font-size: 0.9rem;
-		transition: all 0.2s;
-	}
-
-	.search-input:focus {
-		outline: none;
-		border-color: #ff6b6b;
-		box-shadow: 0 0 0 3px rgba(255, 107, 107, 0.1);
-	}
-
-	.search-btn {
-		padding: 0.75rem 1.25rem;
-		border: none;
-		border-radius: 8px;
-		background: #ff6b6b;
-		color: white;
-		font-size: 1.2rem;
-		cursor: pointer;
-		transition: all 0.2s;
-	}
-
-	.search-btn:hover {
-		background: #ee5a6f;
-	}
-
-	.list-header {
-		padding: 1rem 1.25rem;
-		border-bottom: 1px solid #e5e7eb;
-	}
-
-	.list-header h2 {
-		margin: 0;
-		font-size: 1.1rem;
-		color: #1f2937;
-		font-weight: 700;
-	}
-
-	/* Drone List */
-	.drone-list {
-		flex: 1;
-		overflow-y: auto;
-		padding: 0.75rem;
-	}
-
-	.drone-list::-webkit-scrollbar {
-		width: 6px;
-	}
-
-	.drone-list::-webkit-scrollbar-track {
-		background: #f3f4f6;
-	}
-
-	.drone-list::-webkit-scrollbar-thumb {
-		background: #d1d5db;
-		border-radius: 3px;
-	}
-
-	/* Drone Card */
-	.drone-card {
-		display: flex;
-		flex-direction: column;
-		padding: 1rem;
-		border-radius: 8px;
-		border: 2px solid #e5e7eb;
-		background: white;
-		margin-bottom: 0.75rem;
-		cursor: pointer;
-		transition: all 0.2s;
-		text-align: left;
-		width: 100%;
-	}
-
-	.drone-card:hover {
-		background: #f9fafb;
-		border-color: #d1d5db;
-		transform: translateX(2px);
-	}
-
-	.drone-card.selected {
+	.drone-selected {
 		background: linear-gradient(135deg, #ffeded 0%, #ffe5e5 100%);
-		border-color: #ff6b6b;
-		box-shadow: 0 2px 8px rgba(255, 107, 107, 0.2);
+		border-color: #ef4444 !important;
+		box-shadow: 0 2px 8px rgba(239, 68, 68, 0.2);
 	}
 
-	.drone-card.connected {
-		border-left: 4px solid #10b981;
-	}
-
-	.drone-card.disconnected {
-		border-left: 4px solid #ef4444;
-		opacity: 0.7;
-	}
-
-	.drone-header {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		margin-bottom: 0.75rem;
-	}
-
-	.drone-id {
-		font-size: 1rem;
-		font-weight: 700;
-		color: #1f2937;
-	}
-
-	.drone-header .status-badge {
-		padding: 0.25rem 0.75rem;
-		border-radius: 12px;
-		font-size: 0.75rem;
-		font-weight: 600;
-		display: flex;
-		align-items: center;
-		gap: 0.375rem;
-		border: none;
-		cursor: pointer;
-		transition: all 0.2s;
-	}
-
-	.drone-header .status-badge.connected {
-		background: #d1fae5;
-		color: #065f46;
-	}
-
-	.drone-header .status-badge.disconnected {
-		background: #fee2e2;
-		color: #991b1b;
-	}
-
-	.drone-header .status-badge:hover {
-		transform: scale(1.05);
-	}
-
-	.status-dot {
-		width: 8px;
-		height: 8px;
-		border-radius: 50%;
-	}
-
-	.status-dot.connected {
-		background: #10b981;
-		animation: pulse-dot 2s ease-in-out infinite;
-	}
-
-	.status-dot.disconnected {
-		background: #ef4444;
-	}
-
-	@keyframes pulse-dot {
+	@keyframes pulse-slow {
 		0%,
 		100% {
 			opacity: 1;
@@ -557,203 +310,7 @@
 		}
 	}
 
-	.drone-info {
-		display: flex;
-		flex-direction: column;
-		gap: 0.25rem;
-	}
-
-	.info-row {
-		display: flex;
-		gap: 0.5rem;
-		font-size: 0.85rem;
-	}
-
-	.info-row .label {
-		color: #6b7280;
-		min-width: 80px;
-	}
-
-	.info-row .value {
-		color: #1f2937;
-		font-weight: 500;
-	}
-
-	/* Right Map Section */
-	.map-section {
-		width: 70%;
-		background: white;
-		border-radius: 12px;
-		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-		overflow: hidden;
-		position: relative;
-	}
-
-	.map-container {
-		width: 100%;
-		height: 100%;
-		position: relative;
-	}
-
-	/* Map Legend */
-	.map-legend {
-		position: absolute;
-		bottom: 1.5rem;
-		left: 1.5rem;
-		background: white;
-		padding: 1rem;
-		border-radius: 8px;
-		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-		z-index: 5;
-	}
-
-	.legend-item {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		margin-bottom: 0.5rem;
-	}
-
-	.legend-item:last-child {
-		margin-bottom: 0;
-	}
-
-	.legend-marker {
-		width: 12px;
-		height: 12px;
-		border-radius: 50%;
-		border: 2px solid white;
-		box-shadow: 0 0 4px rgba(0, 0, 0, 0.3);
-	}
-
-	.legend-marker.gps {
-		background: #10b981;
-	}
-
-	.legend-marker.gps-loss {
-		background: #ef4444;
-	}
-
-	.legend-line-sample {
-		width: 30px;
-		height: 3px;
-		border-radius: 2px;
-	}
-
-	.legend-line-sample.gps {
-		background: #10b981;
-	}
-
-	.legend-text {
-		font-size: 0.85rem;
-		color: #374151;
-	}
-
-	/* Drone Popup */
-	.drone-popup {
-		position: absolute;
-		top: 1.5rem;
-		right: 1.5rem;
-		width: 300px;
-		background: white;
-		border-radius: 12px;
-		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
-		padding: 1.5rem;
-		z-index: 10;
-		border: 2px solid #ff6b6b;
-	}
-
-	.close-btn {
-		position: absolute;
-		top: 0.75rem;
-		right: 0.75rem;
-		width: 28px;
-		height: 28px;
-		border: none;
-		background: #f3f4f6;
-		border-radius: 50%;
-		cursor: pointer;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		font-size: 1rem;
-		color: #6b7280;
-		transition: all 0.2s;
-	}
-
-	.close-btn:hover {
-		background: #e5e7eb;
-		color: #1f2937;
-	}
-
-	.drone-popup h3 {
-		margin: 0 0 1rem 0;
-		font-size: 1.5rem;
-		color: #ff6b6b;
-		font-weight: 700;
-	}
-
-	.popup-info {
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-	}
-
-	.popup-row {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		font-size: 0.9rem;
-	}
-
-	.popup-label {
-		color: #6b7280;
-	}
-
-	.popup-value-large {
-		font-size: 1.25rem;
-		font-weight: 700;
-		color: #1f2937;
-	}
-
-	.gps-badge {
-		padding: 0.25rem 0.75rem;
-		border-radius: 12px;
-		font-size: 0.75rem;
-		font-weight: 600;
-		margin-left: auto;
-	}
-
-	.gps-badge.good {
-		background: #d1fae5;
-		color: #065f46;
-	}
-
-	.gps-badge:not(.good) {
-		background: #fee2e2;
-		color: #991b1b;
-	}
-
-	/* Responsive */
-	@media (max-width: 1400px) {
-		.sidebar {
-			width: 35%;
-		}
-		.map-section {
-			width: 65%;
-		}
-	}
-
-	@media (max-width: 1024px) {
-		.main-content {
-			flex-direction: column;
-		}
-		.sidebar,
-		.map-section {
-			width: 100%;
-		}
-		.map-section {
-			height: 400px;
-		}
+	.animate-pulse-slow {
+		animation: pulse-slow 2s ease-in-out infinite;
 	}
 </style>
