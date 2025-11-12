@@ -13,7 +13,7 @@
 <header class="header">
 	<div class="header-content">
 		<div class="logo-section">
-			<div class="logo">🛡️</div>
+			<!-- <div class="logo">🛡️</div> -->
 			<div>
 				<h1>Defensive Dashboard</h1>
 				<p class="subtitle">Real-time Detection Monitoring</p>

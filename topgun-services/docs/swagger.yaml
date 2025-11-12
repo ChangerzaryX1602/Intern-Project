@@ -1,4 +1,25 @@
 definitions:
+  models.Attack:
+    properties:
+      acceleration:
+        type: number
+      distance:
+        type: number
+      function:
+        type: string
+      height:
+        type: number
+      id:
+        type: integer
+      lat:
+        type: number
+      lng:
+        type: number
+      status:
+        type: string
+      velocity:
+        type: number
+    type: object
   models.Camera:
     properties:
       id:
@@ -71,6 +92,106 @@ info:
   contact: {}
   title: KKU GS ADMISSION SERVICES API
 paths:
+  /api/v1/attack:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve a list of attacks with pagination and filtering options.
+      parameters:
+      - description: Page number for pagination
+        in: query
+        name: page
+        type: integer
+      - description: Number of items per page
+        in: query
+        name: per_page
+        type: integer
+      - description: Keyword to filter attacks
+        in: query
+        name: keyword
+        type: string
+      - description: Column to sort by
+        in: query
+        name: column
+        type: string
+      produces:
+      - application/json
+      responses: {}
+      summary: Get Attacks
+      tags:
+      - Attacks
+    post:
+      consumes:
+      - application/json
+      description: Create a new attack record.
+      parameters:
+      - description: Attack data
+        in: body
+        name: attack
+        required: true
+        schema:
+          $ref: '#/definitions/models.Attack'
+      produces:
+      - application/json
+      responses: {}
+      summary: Create Attack
+      tags:
+      - Attacks
+  /api/v1/attack/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete an existing attack record by ID.
+      parameters:
+      - description: Attack ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses: {}
+      summary: Delete Attack
+      tags:
+      - Attacks
+    get:
+      consumes:
+      - application/json
+      description: Retrieve a single attack record by ID.
+      parameters:
+      - description: Attack ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses: {}
+      summary: Get Attack
+      tags:
+      - Attacks
+    put:
+      consumes:
+      - application/json
+      description: Update an existing attack record by ID.
+      parameters:
+      - description: Attack ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Updated attack data
+        in: body
+        name: attack
+        required: true
+        schema:
+          $ref: '#/definitions/models.Attack'
+      produces:
+      - application/json
+      responses: {}
+      summary: Update Attack
+      tags:
+      - Attacks
   /api/v1/auth/login:
     post:
       consumes:
@@ -405,6 +526,35 @@ paths:
       security:
       - ApiKeyAuth: []
       summary: GetDetectFile
+      tags:
+      - Detect
+  /api/v1/detect/by-cameras:
+    post:
+      consumes:
+      - application/json
+      description: Get detections by selected camera IDs
+      parameters:
+      - description: Request body with camera IDs
+        in: body
+        name: request
+        required: true
+        schema:
+          properties:
+            camera_ids:
+              items:
+                type: string
+              type: array
+            limit:
+              type: integer
+            page:
+              type: integer
+          type: object
+      produces:
+      - application/json
+      responses: {}
+      security:
+      - ApiKeyAuth: []
+      summary: GetDetectsByCameras
       tags:
       - Detect
   /api/v1/users/:

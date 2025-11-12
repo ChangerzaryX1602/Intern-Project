@@ -7,7 +7,8 @@
 
 	// Mock data for drones
 	interface Drone {
-		id: string;
+		id: string; // Unique ID for each record
+		trackingId: string; // Tracking ID for grouping (can be duplicate)
 		name: string;
 		status: 'connected' | 'disconnected';
 		location: string;
@@ -21,29 +22,52 @@
 
 	let drones = $state<Drone[]>([
 		{
-			id: 'A01',
+			id: 'A01-1', // Unique ID
+			trackingId: 'A01', // Tracking ID for grouping
 			name: 'Drone ID: A01',
 			status: 'connected',
 			location: 'ภาคกลาง, กรุงเทพ',
-			coordinates: { lat: 14.286169, lng: 101.171044 },
+			coordinates: { lat: 13.7563, lng: 100.5018 }, // กรุงเทพ
 			gpsStatus: 'good',
 			lastUpdate: '11/11/2025 18:16 น.'
 		},
 		{
-			id: 'A02',
+			id: 'A01-2',
+			trackingId: 'A01',
+			name: 'Drone ID: A01',
+			status: 'connected',
+			location: 'ภาคกลาง, กรุงเทพ',
+			coordinates: { lat: 13.7663, lng: 100.5218 }, // เคลื่อนไปทางเหนือ-ตะวันออก
+			gpsStatus: 'good',
+			lastUpdate: '11/11/2025 18:17 น.'
+		},
+		{
+			id: 'A01-3',
+			trackingId: 'A01',
+			name: 'Drone ID: A01',
+			status: 'connected',
+			location: 'ภาคกลาง, กรุงเทพ',
+			coordinates: { lat: 13.7463, lng: 100.5418 }, // เคลื่อนไปทางตะวันออก
+			gpsStatus: 'good',
+			lastUpdate: '11/11/2025 18:18 น.'
+		},
+		{
+			id: 'A02-1',
+			trackingId: 'A02',
 			name: 'Drone ID: A02',
 			status: 'connected',
 			location: 'ภาคกลาง, กรุงเทพ',
-			coordinates: { lat: 14.287215, lng: 101.1716 },
+			coordinates: { lat: 13.7463, lng: 100.4918 },
 			gpsStatus: 'good',
 			lastUpdate: '11/11/2025 18:16 น.'
 		},
 		{
-			id: 'A03',
+			id: 'A03-1',
+			trackingId: 'A03',
 			name: 'Drone ID: A03',
 			status: 'disconnected',
 			location: 'ภาคกลาง, กรุงเทพ',
-			coordinates: { lat: 14.286958, lng: 101.170515 },
+			coordinates: { lat: 13.7263, lng: 100.5118 },
 			gpsStatus: 'loss',
 			lastUpdate: '11/11/2025 20:57 น.'
 		}
@@ -51,13 +75,14 @@
 
 	let selectedDrone = $state<Drone | null>(null);
 	let searchQuery = $state('');
-	let mapCenter: [number, number] = $state([101.171, 14.287]);
+	let mapCenter: [number, number] = $state([100.5018, 13.7563]); // [lng, lat] - กรุงเทพ
 
 	// Generate markers for connected drones
 	let markers = $derived(
 		drones
 			.filter((d) => d.status === 'connected')
 			.map((d) => ({
+				id: d.trackingId, // Use trackingId for line drawing
 				lngLat: [d.coordinates.lng, d.coordinates.lat] as [number, number],
 				popup: `
 					<div style="font-size:13px">
@@ -107,7 +132,7 @@
 	<header class="header">
 		<div class="header-content">
 			<div class="logo-section">
-				<div class="logo">🎯</div>
+				<!-- <div class="logo">🎯</div> -->
 				<div>
 					<h1>Offensive Dashboard</h1>
 					<p class="subtitle">Drone Control & Monitoring</p>
@@ -198,17 +223,21 @@
 		<!-- Right Map Section -->
 		<section class="map-section">
 			<div class="map-container">
-				<MapboxMap accessToken={mapboxToken} center={mapCenter} zoom={13} {markers} />
+				<MapboxMap accessToken={mapboxToken} center={mapCenter} zoom={13} {markers} drawLines={true} />
 
 				<!-- Map Legend -->
 				<div class="map-legend">
 					<div class="legend-item">
-						<span class="legend-line gps"></span>
+						<span class="legend-marker gps"></span>
 						<span class="legend-text">สัญญาณ GPS</span>
 					</div>
 					<div class="legend-item">
-						<span class="legend-line gps-loss"></span>
+						<span class="legend-marker gps-loss"></span>
 						<span class="legend-text">ไม่มีสัญญาณ GPS</span>
+					</div>
+					<div class="legend-item">
+						<span class="legend-line-sample gps"></span>
+						<span class="legend-text">เส้นทางเคลื่อนที่ (ID ซ้ำ)</span>
 					</div>
 				</div>
 			</div>
@@ -589,20 +618,30 @@
 		margin-bottom: 0;
 	}
 
-	.legend-line {
+	.legend-marker {
+		width: 12px;
+		height: 12px;
+		border-radius: 50%;
+		border: 2px solid white;
+		box-shadow: 0 0 4px rgba(0, 0, 0, 0.3);
+	}
+
+	.legend-marker.gps {
+		background: #10b981;
+	}
+
+	.legend-marker.gps-loss {
+		background: #ef4444;
+	}
+
+	.legend-line-sample {
 		width: 30px;
 		height: 3px;
 		border-radius: 2px;
 	}
 
-	.legend-line.gps {
+	.legend-line-sample.gps {
 		background: #10b981;
-	}
-
-	.legend-line.gps-loss {
-		background: #ef4444;
-		border: 2px dashed #ef4444;
-		height: 0;
 	}
 
 	.legend-text {

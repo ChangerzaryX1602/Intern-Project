@@ -26,6 +26,7 @@ func NewDetectHandler(router fiber.Router, service domain.DetectService) {
 	// HTTP routes
 	router.Post("/", h.CreateDetect())
 	router.Get("/", h.GetDetects())
+	router.Post("/by-cameras", h.GetDetectsByCameras())
 	router.Get("/:id", h.GetDetect())
 	router.Get("/:id/file", h.GetDetectFile())
 	router.Put("/:id", h.UpdateDetect())
@@ -246,6 +247,92 @@ func (h *detectHandler) GetDetects() fiber.Handler {
 				"detects":    detects,
 				"pagination": p,
 				"search":     s,
+			},
+		})
+	}
+}
+
+// @Summary GetDetectsByCameras
+// @Tags Detect
+// @Description Get detections by selected camera IDs
+// @Accept json
+// @Produce json
+// @Param request body object{camera_ids=[]string,page=int,limit=int} true "Request body with camera IDs"
+// @Router /api/v1/detect/by-cameras [post]
+// @Security ApiKeyAuth
+func (h *detectHandler) GetDetectsByCameras() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		// Parse request body
+		var req struct {
+			CameraIDs []string `json:"camera_ids"`
+			Page      int      `json:"page"`
+			Limit     int      `json:"limit"`
+		}
+
+		if err := c.BodyParser(&req); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(helpers.ResponseForm{
+				Success: false,
+				Errors: []helpers.ResponseError{
+					{
+						Code:    fiber.StatusBadRequest,
+						Title:   "Invalid request body",
+						Message: err.Error(),
+						Source:  helpers.WhereAmI(),
+					},
+				},
+			})
+		}
+
+		// Validate camera_ids
+		if len(req.CameraIDs) == 0 {
+			return c.Status(fiber.StatusBadRequest).JSON(helpers.ResponseForm{
+				Success: false,
+				Errors: []helpers.ResponseError{
+					{
+						Code:    fiber.StatusBadRequest,
+						Title:   "Missing camera_ids",
+						Message: "camera_ids array is required and cannot be empty",
+						Source:  helpers.WhereAmI(),
+					},
+				},
+			})
+		}
+
+		// Set default pagination values
+		if req.Page == 0 {
+			req.Page = 1
+		}
+		if req.Limit == 0 {
+			req.Limit = 10
+		}
+
+		pagination := models.Pagination{
+			Page:    req.Page,
+			PerPage: req.Limit,
+		}
+
+		// Get detections by camera IDs
+		detects, p, err := h.service.GetDetectsByCameras(req.CameraIDs, pagination)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(helpers.ResponseForm{
+				Success: false,
+				Errors: []helpers.ResponseError{
+					{
+						Code:    fiber.StatusInternalServerError,
+						Title:   "Failed to retrieve detects",
+						Message: err.Error(),
+						Source:  helpers.WhereAmI(),
+					},
+				},
+			})
+		}
+
+		return c.Status(fiber.StatusOK).JSON(helpers.ResponseForm{
+			Success: true,
+			Data: fiber.Map{
+				"detects":    detects,
+				"pagination": p,
+				"camera_ids": req.CameraIDs,
 			},
 		})
 	}

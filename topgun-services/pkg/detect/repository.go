@@ -38,6 +38,25 @@ func (r *detectRepository) GetDetects(pagination models.Pagination, filter model
 	}
 	return detects, &pagination, &filter, nil
 }
+
+func (r *detectRepository) GetDetectsByCameras(cameraIDs []string, pagination models.Pagination) ([]models.Detect, *models.Pagination, error) {
+	if r.DB == nil {
+		return nil, nil, gorm.ErrInvalidDB
+	}
+	var detects []models.Detect
+
+	// Query detections where camera_id is in the provided list
+	dbTx := r.DB.Where("camera_id IN ?", cameraIDs).Order("timestamp DESC")
+	dbTx = utils.ApplyPagination(dbTx, &pagination, &detects)
+
+	err := dbTx.Find(&detects).Error
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return detects, &pagination, nil
+}
+
 func (r *detectRepository) GetDetect(id uint) (*models.Detect, error) {
 	if r.DB == nil {
 		return nil, gorm.ErrInvalidDB

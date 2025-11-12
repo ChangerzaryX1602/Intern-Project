@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"topgun-services/internal/handlers"
+	"topgun-services/pkg/attack"
 	"topgun-services/pkg/auth"
 	"topgun-services/pkg/camera"
 	"topgun-services/pkg/detect"
@@ -39,6 +40,7 @@ func (s *Server) SetupRoutes(app *fiber.App) {
 	authRepository := auth.NewAuthRepository(s.MainDbConn, s.JwtResources, s.RedisStorage)
 	cameraRepository := camera.NewCameraRepository(s.MainDbConn)
 	detectRepository := detect.NewDetectRepository(s.MainDbConn)
+	attackRepository := attack.NewAttackRepository(s.MainDbConn)
 
 	// auto migrate DB only on main process
 	if !fiber.IsChild() {
@@ -52,11 +54,13 @@ func (s *Server) SetupRoutes(app *fiber.App) {
 	authService := auth.NewAuthService(authRepository, userRepository)
 	cameraService := camera.NewCameraService(cameraRepository)
 	detectService := detect.NewDetectService(detectRepository)
+	attackService := attack.NewAttackService(attackRepository)
 	// App Routes
 	auth.NewAuthHandler(groupApiV1.Group("/auth"), routerResource, authService, userService)
 	user.NewUserHandler(groupApiV1.Group("/users"), routerResource, userService, authService)
 	camera.NewCameraHandler(groupApiV1.Group("/camera"), routerResource, cameraService)
 	detect.NewDetectHandler(groupApiV1.Group("/detect"), detectService)
+	attack.NewAttackHandler(groupApiV1.Group("/attack"), attackService)
 
 	// Log routes
 	groupApiV1.Get("/logs", logs.GetLogsHandler(s.LogDbConn))

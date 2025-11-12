@@ -9,6 +9,153 @@
         "contact": {}
     },
     "paths": {
+        "/api/v1/attack": {
+            "get": {
+                "description": "Retrieve a list of attacks with pagination and filtering options.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Attacks"
+                ],
+                "summary": "Get Attacks",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Page number for pagination",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Number of items per page",
+                        "name": "per_page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Keyword to filter attacks",
+                        "name": "keyword",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Column to sort by",
+                        "name": "column",
+                        "in": "query"
+                    }
+                ],
+                "responses": {}
+            },
+            "post": {
+                "description": "Create a new attack record.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Attacks"
+                ],
+                "summary": "Create Attack",
+                "parameters": [
+                    {
+                        "description": "Attack data",
+                        "name": "attack",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.Attack"
+                        }
+                    }
+                ],
+                "responses": {}
+            }
+        },
+        "/api/v1/attack/{id}": {
+            "get": {
+                "description": "Retrieve a single attack record by ID.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Attacks"
+                ],
+                "summary": "Get Attack",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Attack ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {}
+            },
+            "put": {
+                "description": "Update an existing attack record by ID.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Attacks"
+                ],
+                "summary": "Update Attack",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Attack ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Updated attack data",
+                        "name": "attack",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.Attack"
+                        }
+                    }
+                ],
+                "responses": {}
+            },
+            "delete": {
+                "description": "Delete an existing attack record by ID.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Attacks"
+                ],
+                "summary": "Delete Attack",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Attack ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {}
+            }
+        },
         "/api/v1/auth/login": {
             "post": {
                 "description": "Login a user",
@@ -407,6 +554,52 @@
                 "responses": {}
             }
         },
+        "/api/v1/detect/by-cameras": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get detections by selected camera IDs",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Detect"
+                ],
+                "summary": "GetDetectsByCameras",
+                "parameters": [
+                    {
+                        "description": "Request body with camera IDs",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "camera_ids": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string"
+                                    }
+                                },
+                                "limit": {
+                                    "type": "integer"
+                                },
+                                "page": {
+                                    "type": "integer"
+                                }
+                            }
+                        }
+                    }
+                ],
+                "responses": {}
+            }
+        },
         "/api/v1/detect/{id}": {
             "get": {
                 "security": [
@@ -727,6 +920,38 @@
         }
     },
     "definitions": {
+        "models.Attack": {
+            "type": "object",
+            "properties": {
+                "acceleration": {
+                    "type": "number"
+                },
+                "distance": {
+                    "type": "number"
+                },
+                "function": {
+                    "type": "string"
+                },
+                "height": {
+                    "type": "number"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "lat": {
+                    "type": "number"
+                },
+                "lng": {
+                    "type": "number"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "velocity": {
+                    "type": "number"
+                }
+            }
+        },
         "models.Camera": {
             "type": "object",
             "properties": {

@@ -14,12 +14,23 @@ type attackHandler struct {
 
 func NewAttackHandler(router fiber.Router, service domain.AttackService) {
 	handler := &attackHandler{service: service}
-	router.Get("/attacks", handler.GetAttacks())
-	router.Post("/attacks", handler.CreateAttack())
-	router.Put("/attacks/:id", handler.UpdateAttack())
-	router.Delete("/attacks/:id", handler.DeleteAttack())
-	router.Get("/attacks/:id", handler.GetAttack())
+	router.Get("/", handler.GetAttacks())
+	router.Post("/", handler.CreateAttack())
+	router.Put("/:id", handler.UpdateAttack())
+	router.Delete("/:id", handler.DeleteAttack())
+	router.Get("/:id", handler.GetAttack())
 }
+
+// @Summary Get Attacks
+// @Description Retrieve a list of attacks with pagination and filtering options.
+// @Tags Attacks
+// @Accept json
+// @Produce json
+// @Param page query int false "Page number for pagination"
+// @Param per_page query int false "Number of items per page"
+// @Param keyword query string false "Keyword to filter attacks"
+// @Param column query string false "Column to sort by"
+// @Router /api/v1/attack [get]
 func (h *attackHandler) GetAttacks() fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var pagination models.Pagination
@@ -74,6 +85,14 @@ func (h *attackHandler) GetAttacks() fiber.Handler {
 		})
 	}
 }
+
+// @Summary Create Attack
+// @Description Create a new attack record.
+// @Tags Attacks
+// @Accept json
+// @Produce json
+// @Param attack body models.Attack true "Attack data"
+// @Router /api/v1/attack [post]
 func (h *attackHandler) CreateAttack() fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var attack models.Attack
@@ -110,6 +129,15 @@ func (h *attackHandler) CreateAttack() fiber.Handler {
 		})
 	}
 }
+
+// @Summary Update Attack
+// @Description Update an existing attack record by ID.
+// @Tags Attacks
+// @Accept json
+// @Produce json
+// @Param id path int true "Attack ID"
+// @Param attack body models.Attack true "Updated attack data"
+// @Router /api/v1/attack/{id} [put]
 func (h *attackHandler) UpdateAttack() fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		id, err := c.ParamsInt("id")
@@ -161,6 +189,14 @@ func (h *attackHandler) UpdateAttack() fiber.Handler {
 		})
 	}
 }
+
+// @Summary Delete Attack
+// @Description Delete an existing attack record by ID.
+// @Tags Attacks
+// @Accept json
+// @Produce json
+// @Param id path int true "Attack ID"
+// @Router /api/v1/attack/{id} [delete]
 func (h *attackHandler) DeleteAttack() fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		id, err := c.ParamsInt("id")
@@ -197,6 +233,14 @@ func (h *attackHandler) DeleteAttack() fiber.Handler {
 		})
 	}
 }
+
+// @Summary Get Attack
+// @Description Retrieve a single attack record by ID.
+// @Tags Attacks
+// @Accept json
+// @Produce json
+// @Param id path int true "Attack ID"
+// @Router /api/v1/attack/{id} [get]
 func (h *attackHandler) GetAttack() fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		id, err := c.ParamsInt("id")
