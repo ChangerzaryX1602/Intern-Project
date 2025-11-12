@@ -1,7 +1,7 @@
 <script lang="ts">
 	import VideoStream from '$lib/components/VideoStream.svelte';
 
-	let serverUrl = 'ws://localhost:8080';
+	let serverUrl = 'ws://192.168.8.201:8080';
 </script>
 
 <svelte:head>

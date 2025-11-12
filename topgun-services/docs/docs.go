@@ -1157,6 +1157,9 @@ const docTemplate = `{
                 "distance": {
                     "type": "number"
                 },
+                "drone_id": {
+                    "type": "string"
+                },
                 "function": {
                     "type": "string"
                 },

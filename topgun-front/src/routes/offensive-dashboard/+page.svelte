@@ -1,15 +1,33 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import MapboxMap from '$lib/components/MapboxMap.svelte';
 	import SearchBox from '$lib/components/SearchBox.svelte';
 	import { env } from '$env/dynamic/public';
 
 	const mapboxToken = env.PUBLIC_MAPBOX_TOKEN || '';
+	const WS_URL = 'ws://localhost:8080/api/v1/detect/attack-ws';
+	const API_URL = 'http://localhost:8080/api/v1/attack';
+	const DUMMY_CAMERA_ID = '00000000-0000-0000-0000-000000000000'; // UUID placeholder for attack data (not used for attack-ws)
 
-	// Mock data for drones
+	// Attack data from WebSocket
+	interface AttackData {
+		id: number;
+		drone_id: string;
+		lat: number;
+		lng: number;
+		height: number;
+		function: string;
+		acceleration: number;
+		velocity: number;
+		distance: number;
+		status: string;
+		created_at: string;
+	}
+
+	// Transformed drone data for UI
 	interface Drone {
-		id: string; // Unique ID for each record
-		trackingId: string; // Tracking ID for grouping (can be duplicate)
+		id: string; // Unique ID (from attack.id)
+		trackingId: string; // Tracking ID for grouping (drone_id)
 		name: string;
 		status: 'connected' | 'disconnected';
 		location: string;
@@ -19,69 +37,261 @@
 		};
 		gpsStatus: 'good' | 'loss';
 		lastUpdate: string;
+		height: number;
+		velocity: number;
+		acceleration: number;
+		distance: number;
 	}
 
-	let drones = $state<Drone[]>([
-		{
-			id: 'A01-1', // Unique ID
-			trackingId: 'A01', // Tracking ID for grouping
-			name: 'Drone ID: A01',
-			status: 'connected',
-			location: 'ภาคกลาง, กรุงเทพ',
-			coordinates: { lat: 13.7563, lng: 100.5018 }, // กรุงเทพ
-			gpsStatus: 'good',
-			lastUpdate: '11/11/2025 18:16 น.'
-		},
-		{
-			id: 'A01-2',
-			trackingId: 'A01',
-			name: 'Drone ID: A01',
-			status: 'connected',
-			location: 'ภาคกลาง, กรุงเทพ',
-			coordinates: { lat: 13.7663, lng: 100.5218 }, // เคลื่อนไปทางเหนือ-ตะวันออก
-			gpsStatus: 'good',
-			lastUpdate: '11/11/2025 18:17 น.'
-		},
-		{
-			id: 'A01-3',
-			trackingId: 'A01',
-			name: 'Drone ID: A01',
-			status: 'connected',
-			location: 'ภาคกลาง, กรุงเทพ',
-			coordinates: { lat: 13.7463, lng: 100.5418 }, // เคลื่อนไปทางตะวันออก
-			gpsStatus: 'good',
-			lastUpdate: '11/11/2025 18:18 น.'
-		},
-		{
-			id: 'A02-1',
-			trackingId: 'A02',
-			name: 'Drone ID: A02',
-			status: 'connected',
-			location: 'ภาคกลาง, กรุงเทพ',
-			coordinates: { lat: 13.7463, lng: 100.4918 },
-			gpsStatus: 'good',
-			lastUpdate: '11/11/2025 18:16 น.'
-		},
-		{
-			id: 'A03-1',
-			trackingId: 'A03',
-			name: 'Drone ID: A03',
-			status: 'disconnected',
-			location: 'ภาคกลาง, กรุงเทพ',
-			coordinates: { lat: 13.7263, lng: 100.5118 },
-			gpsStatus: 'loss',
-			lastUpdate: '11/11/2025 20:57 น.'
+	// Grouped drone data
+	interface DroneGroup {
+		droneId: string;
+		name: string;
+		paths: Drone[];
+		isExpanded: boolean;
+		lastStatus: 'connected' | 'disconnected';
+		lastGpsStatus: 'good' | 'loss';
+		latestUpdate: string;
+	}
+
+	// Color palette for random drone colors
+	const DRONE_COLORS = [
+		'#ef4444', // red
+		'#f59e0b', // orange
+		'#eab308', // yellow
+		'#84cc16', // lime
+		'#10b981', // green
+		'#14b8a6', // teal
+		'#06b6d4', // cyan
+		'#3b82f6', // blue
+		'#6366f1', // indigo
+		'#8b5cf6', // violet
+		'#a855f7', // purple
+		'#ec4899', // pink
+		'#f43f5e'  // rose
+	];
+
+	// Store assigned colors for each drone_id
+	const droneColors = new Map<string, string>();
+
+	// Get or assign color for drone
+	function getDroneColor(droneId: string): string {
+		if (!droneColors.has(droneId)) {
+			// Assign random color
+			const color = DRONE_COLORS[Math.floor(Math.random() * DRONE_COLORS.length)];
+			droneColors.set(droneId, color);
 		}
-	]);
+		return droneColors.get(droneId)!;
+	}
+
+	let droneGroups = $state<DroneGroup[]>([]);
+	let allDrones = $state<Drone[]>([]); // Keep all drones for map
+	let isConnected = $state(false);
+	let isLoadingInitial = $state(true);
+	let ws: WebSocket | null = null;
+	let reconnectTimeout: any = null;
+	let error = $state<string | null>(null);
 
 	let selectedDrone = $state<Drone | null>(null);
 	let searchQuery = $state('');
 	let mapCenter: [number, number] = $state([100.5018, 13.7563]); // [lng, lat] - กรุงเทพ
 
-	// Generate markers for connected drones
+	// Fetch initial attack data
+	async function fetchInitialData() {
+		try {
+			isLoadingInitial = true;
+			error = null;
+
+			const response = await fetch(API_URL);
+			if (!response.ok) {
+				throw new Error(`HTTP error! status: ${response.status}`);
+			}
+
+			const result = await response.json();
+
+			if (result.success && result.data.attacks) {
+				// Transform and add initial data
+				const drones = result.data.attacks.map((attack: AttackData) => transformAttackToDrone(attack));
+				allDrones = drones;
+				updateDroneGroups();
+
+				// Set map center to first drone
+				if (allDrones.length > 0) {
+					mapCenter = [allDrones[0].coordinates.lng, allDrones[0].coordinates.lat];
+				}
+			}
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed to fetch initial data';
+			console.error('Error fetching initial data:', e);
+		} finally {
+			isLoadingInitial = false;
+		}
+	}
+
+	// Transform attack data to drone
+	function transformAttackToDrone(attack: AttackData): Drone {
+		return {
+			id: `${attack.drone_id}-${attack.id}`,
+			trackingId: attack.drone_id,
+			name: `Drone ID: ${attack.drone_id}`,
+			status: attack.status === 'good' ? 'connected' : 'disconnected',
+			location: 'ภาคกลาง, กรุงเทพ',
+			coordinates: {
+				lat: attack.lat,
+				lng: attack.lng
+			},
+			gpsStatus: attack.status === 'good' ? 'good' : 'loss',
+			lastUpdate: new Date(attack.created_at).toLocaleString('th-TH', {
+				year: 'numeric',
+				month: '2-digit',
+				day: '2-digit',
+				hour: '2-digit',
+				minute: '2-digit',
+				hour12: false
+			}),
+			height: attack.height,
+			velocity: attack.velocity,
+			acceleration: attack.acceleration,
+			distance: attack.distance
+		};
+	}
+
+	// Update drone groups (group by drone_id)
+	function updateDroneGroups() {
+		const grouped = new Map<string, Drone[]>();
+
+		// Group drones by trackingId
+		allDrones.forEach((drone) => {
+			if (!grouped.has(drone.trackingId)) {
+				grouped.set(drone.trackingId, []);
+			}
+			grouped.get(drone.trackingId)!.push(drone);
+		});
+
+		// Convert to DroneGroup array
+		droneGroups = Array.from(grouped.entries()).map(([droneId, paths]) => {
+			// Sort by time (oldest to newest)
+			paths.sort((a, b) => {
+				const timeA = new Date(a.lastUpdate).getTime();
+				const timeB = new Date(b.lastUpdate).getTime();
+				return timeA - timeB;
+			});
+
+			const latestDrone = paths[paths.length - 1];
+			const existingGroup = droneGroups.find((g) => g.droneId === droneId);
+
+			return {
+				droneId,
+				name: `Drone ID: ${droneId}`,
+				paths,
+				isExpanded: existingGroup?.isExpanded ?? true, // Default: expanded (show all drones)
+				lastStatus: latestDrone.status,
+				lastGpsStatus: latestDrone.gpsStatus,
+				latestUpdate: latestDrone.lastUpdate
+			};
+		});
+	}
+
+	// Connect to WebSocket
+	function connectWebSocket() {
+		if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+			return;
+		}
+
+		try {
+			ws = new WebSocket(WS_URL);
+
+			ws.onopen = () => {
+				console.log('✅ WebSocket connected for attack data');
+				isConnected = true;
+				error = null;
+
+				// No need to send camera_id for attack-ws
+				// Server will automatically send confirmation
+			};
+
+			ws.onmessage = (event) => {
+				try {
+					const data = JSON.parse(event.data);
+					console.log('📨 Received attack data:', data);
+
+					// Handle confirmation message
+					if (data.status === 'connected') {
+						console.log('✅ Subscribed to attack data stream');
+						return;
+					}
+
+					// Handle attack data format (single attack from broadcast)
+					if (data.drone_id) {
+						// Single attack data format - append
+						const newDrone = transformAttackToDrone(data);
+						const exists = allDrones.some((d) => d.id === newDrone.id);
+						if (!exists) {
+							allDrones = [...allDrones, newDrone];
+							updateDroneGroups();
+
+							// Update map center to latest drone
+							const latest = allDrones[allDrones.length - 1];
+							mapCenter = [latest.coordinates.lng, latest.coordinates.lat];
+						}
+					}
+				} catch (e) {
+					console.error('Error parsing WebSocket message:', e);
+				}
+			};
+
+			ws.onerror = (e) => {
+				console.error('❌ WebSocket error:', e);
+				error = 'WebSocket connection error';
+			};
+
+			ws.onclose = () => {
+				console.log('🔌 WebSocket disconnected');
+				isConnected = false;
+
+				// Auto-reconnect after 3 seconds
+				reconnectTimeout = setTimeout(() => {
+					console.log('🔄 Attempting to reconnect...');
+					connectWebSocket();
+				}, 3000);
+			};
+		} catch (e) {
+			console.error('Failed to create WebSocket:', e);
+			error = 'Failed to connect to WebSocket';
+		}
+	}
+
+	// Disconnect WebSocket
+	function disconnectWebSocket() {
+		if (reconnectTimeout) {
+			clearTimeout(reconnectTimeout);
+			reconnectTimeout = null;
+		}
+
+		if (ws) {
+			ws.close();
+			ws = null;
+		}
+
+		isConnected = false;
+	}
+
+	// Toggle group expansion
+	function toggleGroupExpansion(droneId: string) {
+		const group = droneGroups.find((g) => g.droneId === droneId);
+		if (group) {
+			group.isExpanded = !group.isExpanded;
+		}
+	}
+
+	// Generate markers for all drones (for expanded groups)
 	let markers = $derived(
-		drones
-			.filter((d) => d.status === 'connected')
+		allDrones
+			.filter((d) => {
+				// Show only drones from expanded groups
+				const group = droneGroups.find((g) => g.droneId === d.trackingId);
+				return group?.isExpanded && d.status === 'connected';
+			})
 			.map((d) => ({
 				id: d.trackingId, // Use trackingId for line drawing
 				lngLat: [d.coordinates.lng, d.coordinates.lat] as [number, number],
@@ -89,16 +299,18 @@
 					<div style="font-size:13px">
 						<strong>${d.name}</strong><br/>
 						${d.location}<br/>
+						Height: ${d.height}m<br/>
+						Velocity: ${d.velocity} km/h<br/>
 						GPS: ${d.gpsStatus === 'good' ? '✓ Connected' : '✗ Loss'}<br/>
 						${d.lastUpdate}
 					</div>`,
-				color: d.gpsStatus === 'good' ? '#10b981' : '#ef4444'
+				color: getDroneColor(d.trackingId) // Use random color per drone_id
 			}))
 	);
 
-	// Filter drones based on search
-	let filteredDrones = $derived(
-		drones.filter((d) => d.name.toLowerCase().includes(searchQuery.toLowerCase()))
+	// Filter drone groups based on search
+	let filteredGroups = $derived(
+		droneGroups.filter((g) => g.name.toLowerCase().includes(searchQuery.toLowerCase()))
 	);
 
 	function selectDrone(drone: Drone) {
@@ -110,17 +322,28 @@
 	}
 
 	function toggleDroneStatus(droneId: string) {
-		const drone = drones.find((d) => d.id === droneId);
+		const drone = allDrones.find((d) => d.id === droneId);
 		if (drone) {
 			drone.status = drone.status === 'connected' ? 'disconnected' : 'connected';
 			if (drone.status === 'disconnected') {
 				drone.gpsStatus = 'loss';
 			}
+			updateDroneGroups();
 		}
 	}
 
-	onMount(() => {
+	onMount(async () => {
 		console.log('Offensive Dashboard mounted');
+		// Fetch initial data first
+		await fetchInitialData();
+		// Then connect to WebSocket for real-time updates
+		connectWebSocket();
+	});
+
+	onDestroy(() => {
+		console.log('Offensive Dashboard unmounted');
+		// Disconnect WebSocket
+		disconnectWebSocket();
 	});
 </script>
 
@@ -140,8 +363,30 @@
 			</div>
 
 			<div class="flex items-center gap-4 px-6 py-2 bg-white/20 rounded-lg">
+				<span class="text-sm opacity-90">Connection:</span>
+				<span class="flex items-center gap-2">
+					<span
+						class="w-2 h-2 rounded-full"
+						class:bg-green-400={isConnected}
+						class:bg-red-400={!isConnected}
+						class:animate-pulse={isConnected}
+					></span>
+					<span class="text-sm font-semibold">
+						{isConnected ? '🟢 Connected' : '🔴 Disconnected'}
+					</span>
+				</span>
+			</div>
+
+			<div class="flex items-center gap-4 px-6 py-2 bg-white/20 rounded-lg">
 				<span class="text-sm opacity-90">Server Time:</span>
-				<span class="text-lg font-bold">11/11/2025 19:02</span>
+				<span class="text-lg font-bold">{new Date().toLocaleString('th-TH', { 
+					year: 'numeric',
+					month: '2-digit', 
+					day: '2-digit',
+					hour: '2-digit',
+					minute: '2-digit',
+					hour12: false
+				})}</span>
 				<span class="px-3 py-1 bg-white/30 rounded-xl text-xs font-semibold">🔴 LIVE</span>
 			</div>
 		</div>
@@ -161,68 +406,179 @@
 
 			<!-- Drone List Header -->
 			<div class="px-5 py-4 border-b border-gray-200">
-				<h2 class="m-0 text-lg text-gray-800 font-bold">ทั้งหมด {drones.length} ตัว</h2>
+				<h2 class="m-0 text-lg text-gray-800 font-bold">
+					{#if isLoadingInitial}
+						🔄 กำลังโหลดข้อมูล...
+					{:else if !isConnected}
+						⚠️ กำลังเชื่อมต่อ WebSocket...
+					{:else if error}
+						❌ เกิดข้อผิดพลาด
+					{:else}
+						ทั้งหมด {droneGroups.length} Drone ({allDrones.length} paths)
+					{/if}
+				</h2>
+				{#if error}
+					<p class="text-sm text-red-500 mt-1">{error}</p>
+					<button
+						class="mt-2 px-3 py-1 bg-red-500 text-white text-sm rounded hover:bg-red-600 transition-colors"
+						onclick={connectWebSocket}
+					>
+						เชื่อมต่อใหม่
+					</button>
+				{/if}
 			</div>
 
-			<!-- Drone Cards -->
+			<!-- Drone Cards (Grouped) -->
 			<div class="flex-1 overflow-y-auto p-3 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 hover:scrollbar-thumb-gray-400">
-				{#each filteredDrones as drone (drone.id)}
-					<div
-						class="flex flex-col p-4 rounded-lg border-2 bg-white mb-3 cursor-pointer transition-all duration-200 hover:bg-gray-50 hover:border-gray-300 hover:translate-x-0.5"
-						class:drone-selected={selectedDrone?.id === drone.id}
-						class:border-gray-200={selectedDrone?.id !== drone.id}
-						class:border-l-4={drone.status === 'connected' || drone.status === 'disconnected'}
-						class:border-l-green-500={drone.status === 'connected'}
-						class:border-l-red-500={drone.status === 'disconnected'}
-						class:opacity-70={drone.status === 'disconnected'}
-						onclick={() => selectDrone(drone)}
-						role="button"
-						tabindex="0"
-						onkeydown={(e) => e.key === 'Enter' && selectDrone(drone)}
-					>
-						<div class="flex justify-between items-center mb-3">
-							<span class="text-base font-bold text-gray-800">{drone.name}</span>
-							<button
-								class="px-3 py-1 rounded-xl text-xs font-semibold flex items-center gap-1.5 border-none cursor-pointer transition-all duration-200 hover:scale-105"
-								class:bg-green-100={drone.status === 'connected'}
-								class:text-green-800={drone.status === 'connected'}
-								class:bg-red-100={drone.status === 'disconnected'}
-								class:text-red-800={drone.status === 'disconnected'}
-								onclick={(e) => {
-									e.stopPropagation();
-									toggleDroneStatus(drone.id);
-								}}
-							>
-								<span
-									class="w-2 h-2 rounded-full"
-									class:bg-green-500={drone.status === 'connected'}
-									class:animate-pulse-slow={drone.status === 'connected'}
-									class:bg-red-500={drone.status === 'disconnected'}
-								></span>
-								{#if drone.status === 'connected'}
-									Connect
-								{:else}
-									Disconnect
-								{/if}
-							</button>
-						</div>
-
-						<div class="flex flex-col gap-1">
-							<div class="flex gap-2 text-sm">
-								<span class="text-gray-600 min-w-[80px]">ปลายทาง:</span>
-								<span class="text-gray-800 font-medium">{drone.location}</span>
-							</div>
-							<div class="flex gap-2 text-sm">
-								<span class="text-gray-600 min-w-[80px]">ชุดบุกค้า:</span>
-								<span class="text-gray-800 font-medium">ภาคกลาง, กรุงเทพ</span>
-							</div>
-							<div class="flex gap-2 text-sm">
-								<span class="text-gray-600 min-w-[80px]">เวลาทรง:</span>
-								<span class="text-gray-800 font-medium">{drone.lastUpdate}</span>
-							</div>
+				{#if isLoadingInitial}
+					<div class="flex items-center justify-center h-full">
+						<div class="text-center">
+							<div class="animate-spin rounded-full h-12 w-12 border-b-2 border-red-500 mx-auto mb-4"></div>
+							<p class="text-gray-500">กำลังโหลดข้อมูลเริ่มต้น...</p>
 						</div>
 					</div>
-				{/each}
+				{:else if !isConnected && allDrones.length === 0}
+					<div class="flex items-center justify-center h-full">
+						<div class="text-center">
+							<div class="animate-spin rounded-full h-12 w-12 border-b-2 border-red-500 mx-auto mb-4"></div>
+							<p class="text-gray-500">กำลังเชื่อมต่อ WebSocket...</p>
+						</div>
+					</div>
+				{:else if filteredGroups.length === 0}
+					<div class="flex items-center justify-center h-full">
+						<div class="text-center">
+							<p class="text-gray-500 mb-2">📡 {searchQuery ? 'ไม่พบข้อมูลที่ค้นหา' : 'รอข้อมูล Drone...'}</p>
+							{#if !searchQuery}
+								<p class="text-xs text-gray-400">เชื่อมต่อสำเร็จ รอข้อมูลจาก Server</p>
+							{/if}
+						</div>
+					</div>
+				{:else}
+					{#each filteredGroups as group (group.droneId)}
+						<!-- Group Header (Collapsible) -->
+						<div
+							class="flex flex-col p-4 rounded-lg border-2 bg-white mb-3 cursor-pointer transition-all duration-200 hover:bg-gray-50"
+							style="border-left: 4px solid {getDroneColor(group.droneId)};"
+							class:border-gray-200={!group.isExpanded}
+							class:shadow-md={group.isExpanded}
+							style:background-color={group.isExpanded ? `${getDroneColor(group.droneId)}10` : 'white'}
+							onclick={() => toggleGroupExpansion(group.droneId)}
+							role="button"
+							tabindex="0"
+							onkeydown={(e) => e.key === 'Enter' && toggleGroupExpansion(group.droneId)}
+						>
+							<div class="flex justify-between items-center">
+								<div class="flex items-center gap-3">
+									<!-- Color indicator circle -->
+									<div 
+										class="w-3 h-3 rounded-full" 
+										style="background-color: {getDroneColor(group.droneId)};"
+									></div>
+									<span class="text-base">
+										{group.isExpanded ? '🔽' : '▶️'}
+									</span>
+									<div>
+										<span class="text-base font-bold text-gray-800">{group.name}</span>
+										<span class="ml-2 text-xs text-gray-500">({group.paths.length} paths)</span>
+									</div>
+								</div>
+								<button
+									class="px-3 py-1 rounded-xl text-xs font-semibold flex items-center gap-1.5 border-none cursor-pointer transition-all duration-200 hover:scale-105"
+									class:bg-green-100={group.lastStatus === 'connected'}
+									class:text-green-800={group.lastStatus === 'connected'}
+									class:bg-red-100={group.lastStatus === 'disconnected'}
+									class:text-red-800={group.lastStatus === 'disconnected'}
+									onclick={(e) => {
+										e.stopPropagation();
+									}}
+								>
+									<span
+										class="w-2 h-2 rounded-full"
+										class:bg-green-500={group.lastStatus === 'connected'}
+										class:animate-pulse-slow={group.lastStatus === 'connected'}
+										class:bg-red-500={group.lastStatus === 'disconnected'}
+									></span>
+									{#if group.lastStatus === 'connected'}
+										Connect
+									{:else}
+										Disconnect
+									{/if}
+								</button>
+							</div>
+
+							<!-- Latest info (always visible) -->
+							<div class="mt-2 flex gap-4 text-xs text-gray-600">
+								<span>📍 {group.paths[group.paths.length - 1].coordinates.lat.toFixed(4)}, {group.paths[group.paths.length - 1].coordinates.lng.toFixed(4)}</span>
+								<span>⏰ {group.latestUpdate}</span>
+							</div>
+						</div>
+
+						<!-- Expanded Paths -->
+						{#if group.isExpanded}
+							<div class="ml-4 mb-3 space-y-2">
+								{#each group.paths as drone, index (drone.id)}
+									<div
+										class="flex flex-col p-3 rounded-lg border-2 bg-gray-50 hover:bg-gray-100 transition-all duration-200 cursor-pointer"
+										style="border-left: 3px solid {getDroneColor(group.droneId)};"
+										class:border-blue-400={selectedDrone?.id === drone.id}
+										class:bg-blue-50={selectedDrone?.id === drone.id}
+										class:shadow={selectedDrone?.id === drone.id}
+										onclick={(e) => {
+											e.stopPropagation();
+											selectDrone(drone);
+										}}
+										onkeydown={(e) => {
+											if (e.key === 'Enter' || e.key === ' ') {
+												e.stopPropagation();
+												e.preventDefault();
+												selectDrone(drone);
+											}
+										}}
+										role="button"
+										tabindex="0"
+									>
+										<div class="flex justify-between items-center mb-2">
+											<span class="text-sm font-semibold text-gray-700">
+												📍 Path #{index + 1}
+											</span>
+											<span
+												class="px-2 py-0.5 rounded text-xs"
+												class:bg-green-100={drone.gpsStatus === 'good'}
+												class:text-green-700={drone.gpsStatus === 'good'}
+												class:bg-red-100={drone.gpsStatus !== 'good'}
+												class:text-red-700={drone.gpsStatus !== 'good'}
+											>
+												GPS {drone.gpsStatus === 'good' ? '✓' : '✗'}
+											</span>
+										</div>
+										<div class="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+											<div>
+												<span class="text-gray-600">ตำแหน่ง:</span>
+												<span class="font-medium text-gray-800 ml-1">{drone.coordinates.lat.toFixed(4)}, {drone.coordinates.lng.toFixed(4)}</span>
+											</div>
+											<div>
+												<span class="text-gray-600">ความสูง:</span>
+												<span class="font-medium text-gray-800 ml-1">{drone.height} ม.</span>
+											</div>
+											<div>
+												<span class="text-gray-600">ความเร็ว:</span>
+												<span class="font-medium text-gray-800 ml-1">{drone.velocity} km/h</span>
+											</div>
+											<div>
+												<span class="text-gray-600">ระยะทาง:</span>
+												<span class="font-medium text-gray-800 ml-1">{drone.distance} ม.</span>
+											</div>
+											<div class="col-span-2">
+												<span class="text-gray-600">เวลา:</span>
+												<span class="font-medium text-gray-800 ml-1">{drone.lastUpdate}</span>
+											</div>
+										</div>
+									</div>
+								{/each}
+							</div>
+						{/if}
+					{/each}
+				{/if}
 			</div>
 		</aside>
 
@@ -232,7 +588,7 @@
 				<MapboxMap accessToken={mapboxToken} center={mapCenter} zoom={13} {markers} drawLines={true} />
 
 				<!-- Map Legend -->
-				<div class="absolute bottom-6 left-6 bg-white px-4 py-3 rounded-lg shadow-md z-[5]">
+				<div class="absolute bottom-6 left-6 bg-white px-4 py-3 rounded-lg shadow-md z-5">
 					<div class="flex items-center gap-2 mb-2">
 						<span class="w-3 h-3 rounded-full border-2 border-white shadow-md bg-green-500"></span>
 						<span class="text-sm text-gray-700">สัญญาณ GPS</span>
@@ -250,41 +606,54 @@
 
 			<!-- Selected Drone Info Popup -->
 			{#if selectedDrone && selectedDrone.status === 'connected'}
-				<div class="absolute top-6 right-6 w-[300px] bg-white rounded-xl shadow-xl p-6 z-10 border-2 border-red-500">
+				<div class="absolute top-6 right-6 w-[320px] bg-white rounded-xl shadow-xl p-6 z-10 border-2 border-red-500">
 					<button
 						class="absolute top-3 right-3 w-7 h-7 border-none bg-gray-100 rounded-full cursor-pointer flex items-center justify-center text-base text-gray-600 transition-all duration-200 hover:bg-gray-200 hover:text-gray-800"
 						onclick={() => (selectedDrone = null)}
 					>
 						✕
 					</button>
-					<h3 class="m-0 mb-4 text-2xl text-red-500 font-bold">{selectedDrone.id}</h3>
-					<div class="flex flex-col gap-2">
-						<div class="flex items-center gap-2 text-sm">
-							<span class="text-gray-600">ภาคกลาง</span>
-						</div>
-						<div class="flex items-center gap-2 text-sm">
-							<span class="text-gray-600">กรุงเทพ</span>
-						</div>
-						<div class="flex items-center gap-2 text-sm">
-							<span class="text-gray-600">เวลาทรงหนารถอาวุธ:</span>
-						</div>
-						<div class="flex items-center gap-2 text-sm">
-							<span class="text-gray-600">หมิงตอแผน:</span>
-						</div>
-						<div class="flex items-center gap-2 text-sm">
-							<span class="text-gray-600">กรุงเทพ</span>
-						</div>
-						<div class="flex items-center gap-2 text-sm">
-							<span class="text-xl font-bold text-gray-800">{selectedDrone.id}</span>
+					<h3 class="m-0 mb-4 text-2xl text-red-500 font-bold">{selectedDrone.name}</h3>
+					<div class="flex flex-col gap-3">
+						<div class="flex justify-between items-center text-sm pb-2 border-b border-gray-200">
+							<span class="text-gray-600">สถานะ GPS:</span>
 							<span
-								class="px-3 py-1 rounded-xl text-xs font-semibold ml-auto"
+								class="px-3 py-1 rounded-xl text-xs font-semibold"
 								class:bg-green-100={selectedDrone.gpsStatus === 'good'}
 								class:text-green-800={selectedDrone.gpsStatus === 'good'}
 								class:bg-red-100={selectedDrone.gpsStatus !== 'good'}
 								class:text-red-800={selectedDrone.gpsStatus !== 'good'}
 							>
-								GPS {selectedDrone.gpsStatus === 'good' ? 'Connect' : 'Loss'}
+								{selectedDrone.gpsStatus === 'good' ? '✓ Connected' : '✗ Loss'}
 							</span>
+						</div>
+						<div class="flex justify-between items-center text-sm">
+							<span class="text-gray-600">พิกัด Lat:</span>
+							<span class="text-gray-800 font-mono font-semibold">{selectedDrone.coordinates.lat.toFixed(6)}</span>
+						</div>
+						<div class="flex justify-between items-center text-sm">
+							<span class="text-gray-600">พิกัด Lng:</span>
+							<span class="text-gray-800 font-mono font-semibold">{selectedDrone.coordinates.lng.toFixed(6)}</span>
+						</div>
+						<div class="flex justify-between items-center text-sm">
+							<span class="text-gray-600">ความสูง:</span>
+							<span class="text-gray-800 font-semibold">{selectedDrone.height} เมตร</span>
+						</div>
+						<div class="flex justify-between items-center text-sm">
+							<span class="text-gray-600">ความเร็ว:</span>
+							<span class="text-gray-800 font-semibold">{selectedDrone.velocity} km/h</span>
+						</div>
+						<div class="flex justify-between items-center text-sm">
+							<span class="text-gray-600">ความเร่ง:</span>
+							<span class="text-gray-800 font-semibold">{selectedDrone.acceleration} m/s²</span>
+						</div>
+						<div class="flex justify-between items-center text-sm">
+							<span class="text-gray-600">ระยะทาง:</span>
+							<span class="text-gray-800 font-semibold">{selectedDrone.distance} เมตร</span>
+						</div>
+						<div class="flex justify-between items-center text-sm pt-2 border-t border-gray-200">
+							<span class="text-gray-600">อัพเดทล่าสุด:</span>
+							<span class="text-gray-800 text-xs">{selectedDrone.lastUpdate}</span>
 						</div>
 					</div>
 				</div>

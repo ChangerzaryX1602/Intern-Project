@@ -4,6 +4,7 @@ import "time"
 
 type Attack struct {
 	ID            uint      `gorm:"primaryKey;autoIncrement" json:"id"`
+	DroneID       string    `json:"drone_id"`
 	Lat           float32   `json:"lat"`
 	Lng           float32   `json:"lng"`
 	Height        float32   `json:"height"`

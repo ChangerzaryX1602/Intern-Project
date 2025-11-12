@@ -106,10 +106,9 @@
 				const coordinates = group.map((m) => m.lngLat);
 				const color = group[0].color || '#3b82f6';
 				
-				// Determine icon name based on color
-				let iconName = 'arrow-icon-blue';
-				if (color === '#10b981') iconName = 'arrow-icon-green';
-				else if (color === '#ef4444') iconName = 'arrow-icon-red';
+				// Extract color hex without '#' for icon name
+				const colorHex = color.replace('#', '');
+				const iconName = `arrow-icon-${colorHex}`;
 				
 				lineFeatures.push({
 					type: 'Feature',
@@ -278,11 +277,21 @@
 
 		// Wait for map to load before adding markers
 		map.on('load', () => {
-			// Create arrow icons for different colors
+			// Create arrow icons for all possible colors
 			const colors = [
-				{ name: 'green', value: '#10b981' },
-				{ name: 'red', value: '#ef4444' },
-				{ name: 'blue', value: '#3b82f6' }
+				{ name: 'ef4444', value: '#ef4444' }, // red
+				{ name: 'f59e0b', value: '#f59e0b' }, // orange
+				{ name: 'eab308', value: '#eab308' }, // yellow
+				{ name: '84cc16', value: '#84cc16' }, // lime
+				{ name: '10b981', value: '#10b981' }, // green
+				{ name: '14b8a6', value: '#14b8a6' }, // teal
+				{ name: '06b6d4', value: '#06b6d4' }, // cyan
+				{ name: '3b82f6', value: '#3b82f6' }, // blue
+				{ name: '6366f1', value: '#6366f1' }, // indigo
+				{ name: '8b5cf6', value: '#8b5cf6' }, // violet
+				{ name: 'a855f7', value: '#a855f7' }, // purple
+				{ name: 'ec4899', value: '#ec4899' }, // pink
+				{ name: 'f43f5e', value: '#f43f5e' }  // rose
 			];
 
 			colors.forEach(({ name, value }) => {

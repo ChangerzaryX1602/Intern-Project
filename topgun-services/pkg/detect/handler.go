@@ -20,8 +20,9 @@ type detectHandler struct {
 func NewDetectHandler(router fiber.Router, service domain.DetectService) {
 	h := &detectHandler{service: service}
 
-	// WebSocket route
+	// WebSocket routes
 	router.Get("/ws", WebSocketUpgrade(), h.HandleWebSocket())
+	router.Get("/attack-ws", WebSocketUpgrade(), h.HandleAttackWebSocket())
 
 	// HTTP routes
 	router.Post("/", h.CreateDetect())

@@ -47,5 +47,5 @@ func ApplyPagination(db *gorm.DB, pagination *models.Pagination, model interface
 		pagination.PerPage = 10
 	}
 
-	return db.Offset((pagination.Page - 1) * pagination.PerPage).Limit(pagination.PerPage)
+	return db.Offset((pagination.Page - 1) * pagination.PerPage)
 }

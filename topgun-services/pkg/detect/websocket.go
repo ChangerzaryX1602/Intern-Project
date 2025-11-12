@@ -67,13 +67,30 @@ type VideoHub struct {
 
 // Video client structure
 type VideoClient struct {
-	conn     *websocket.Conn
-	send     chan []byte
-	writeMux sync.Mutex // Protect concurrent writes
+	conn *websocket.Conn
+	send chan []byte
+}
+
+// Attack hub for broadcasting attack data to all clients
+type AttackHub struct {
+	clients    map[*AttackClient]bool
+	broadcast  chan *models.Attack
+	register   chan *AttackClient
+	unregister chan *AttackClient
+	mutex      sync.RWMutex
+}
+
+// Attack client structure
+type AttackClient struct {
+	conn *websocket.Conn
+	send chan []byte
 }
 
 // Global video hub instance
 var videoHub *VideoHub
+
+// Global attack hub instance
+var attackHub *AttackHub
 
 // Global hub instance
 var hub *Hub
@@ -95,6 +112,15 @@ func init() {
 		unregister: make(chan *VideoClient),
 	}
 	go videoHub.run()
+
+	// Initialize attack hub
+	attackHub = &AttackHub{
+		clients:    make(map[*AttackClient]bool),
+		broadcast:  make(chan *models.Attack, 100),
+		register:   make(chan *AttackClient),
+		unregister: make(chan *AttackClient),
+	}
+	go attackHub.run()
 }
 
 // Run video hub to handle video client connections and broadcasts
@@ -119,16 +145,65 @@ func (vh *VideoHub) run() {
 		case frame := <-vh.broadcast:
 			vh.mutex.RLock()
 			frameData := mustMarshal(frame)
+			// Collect clients to unregister
+			var toUnregister []*VideoClient
 			for client := range vh.clients {
 				select {
 				case client.send <- frameData:
 				default:
-					// Client buffer full, disconnect
-					close(client.send)
-					delete(vh.clients, client)
+					// Client buffer full, mark for disconnect
+					toUnregister = append(toUnregister, client)
 				}
 			}
 			vh.mutex.RUnlock()
+
+			// Unregister slow clients outside the lock
+			for _, client := range toUnregister {
+				vh.unregister <- client
+			}
+		}
+	}
+}
+
+// Run attack hub to handle attack client connections and broadcasts
+func (ah *AttackHub) run() {
+	for {
+		select {
+		case client := <-ah.register:
+			ah.mutex.Lock()
+			ah.clients[client] = true
+			ah.mutex.Unlock()
+			log.Printf("Attack client connected. Total clients: %d", len(ah.clients))
+
+		case client := <-ah.unregister:
+			ah.mutex.Lock()
+			if _, ok := ah.clients[client]; ok {
+				delete(ah.clients, client)
+				close(client.send)
+				log.Printf("Attack client disconnected. Total clients: %d", len(ah.clients))
+			}
+			ah.mutex.Unlock()
+
+		case attack := <-ah.broadcast:
+			ah.mutex.RLock()
+			attackData := mustMarshal(attack)
+			// Collect clients to unregister
+			var toUnregister []*AttackClient
+			for client := range ah.clients {
+				select {
+				case client.send <- attackData:
+				default:
+					// Client buffer full, mark for disconnect
+					toUnregister = append(toUnregister, client)
+				}
+			}
+			ah.mutex.RUnlock()
+
+			// Unregister slow clients outside the lock
+			for _, client := range toUnregister {
+				ah.unregister <- client
+			}
+			log.Printf("Broadcasted attack data to %d clients. DroneID: %s", len(ah.clients), attack.DroneID)
 		}
 	}
 }
@@ -140,6 +215,17 @@ func BroadcastVideoFrame(frame *VideoFrameMessage) {
 		case videoHub.broadcast <- frame:
 		default:
 			log.Println("Video broadcast channel full, dropping frame")
+		}
+	}
+}
+
+// BroadcastAttack broadcasts attack data to all connected WebSocket clients
+func BroadcastAttack(attack *models.Attack) {
+	if attackHub != nil {
+		select {
+		case attackHub.broadcast <- attack:
+		default:
+			log.Println("Attack broadcast channel full, dropping attack data")
 		}
 	}
 }
@@ -165,6 +251,8 @@ func (h *Hub) run() {
 
 		case message := <-h.broadcast:
 			h.mutex.RLock()
+			// Collect clients to unregister
+			var toUnregister []*Client
 			for client := range h.clients {
 				// Only send to clients subscribed to this camera
 				if client.cameraID == message.CameraID {
@@ -173,12 +261,17 @@ func (h *Hub) run() {
 					select {
 					case client.send <- mustMarshal(detectionMsg):
 					default:
-						close(client.send)
-						delete(h.clients, client)
+						// Client buffer full, mark for disconnect
+						toUnregister = append(toUnregister, client)
 					}
 				}
 			}
 			h.mutex.RUnlock()
+
+			// Unregister slow clients outside the lock
+			for _, client := range toUnregister {
+				h.unregister <- client
+			}
 		}
 	}
 }
@@ -322,6 +415,112 @@ func (h *detectHandler) HandleWebSocket() fiber.Handler {
 	})
 }
 
+// HandleAttackWebSocket - WebSocket handler for broadcasting attack data to frontend
+func (h *detectHandler) HandleAttackWebSocket() fiber.Handler {
+	return websocket.New(func(c *websocket.Conn) {
+		client := &AttackClient{
+			conn: c,
+			send: make(chan []byte, 256),
+		}
+		
+		// Register client
+		attackHub.register <- client
+
+		// Create channels for write operations
+		writeChan := make(chan interface{}, 100)
+		done := make(chan struct{})
+		var closeOnce sync.Once
+
+		// Start single write goroutine
+		go func() {
+			defer func() {
+				attackHub.unregister <- client
+			}()
+
+			// Send initial confirmation
+			if err := c.WriteJSON(fiber.Map{
+				"status":  "connected",
+				"message": "Subscribed to attack data stream",
+			}); err != nil {
+				log.Printf("Error sending initial message: %v", err)
+				closeOnce.Do(func() { close(done) })
+				return
+			}
+
+			for {
+				select {
+				case message, ok := <-client.send:
+					if !ok {
+						closeOnce.Do(func() { close(done) })
+						return
+					}
+					if err := c.WriteMessage(websocket.TextMessage, message); err != nil {
+						log.Printf("Error writing attack data: %v", err)
+						closeOnce.Do(func() { close(done) })
+						return
+					}
+				case msg := <-writeChan:
+					switch m := msg.(type) {
+					case []byte:
+						if err := c.WriteMessage(websocket.PongMessage, m); err != nil {
+							log.Printf("Error writing pong: %v", err)
+							closeOnce.Do(func() { close(done) })
+							return
+						}
+					case map[string]interface{}:
+						if err := c.WriteJSON(m); err != nil {
+							log.Printf("Error writing JSON: %v", err)
+							closeOnce.Do(func() { close(done) })
+							return
+						}
+					}
+				case <-done:
+					return
+				}
+			}
+		}()
+
+		// Keep connection alive and handle ping/pong
+		for {
+			messageType, payload, err := c.ReadMessage()
+			if err != nil {
+				if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+					log.Printf("Attack client unexpected close: %v", err)
+				}
+				closeOnce.Do(func() { close(done) })
+				break
+			}
+
+			// Handle ping - send pong via write channel
+			if messageType == websocket.PingMessage {
+				select {
+				case writeChan <- []byte(nil):
+				default:
+					log.Printf("Write channel full, skipping pong")
+				}
+			}
+
+			// Handle text messages (e.g., ping from client)
+			if messageType == websocket.TextMessage {
+				var msg map[string]interface{}
+				if err := json.Unmarshal(payload, &msg); err == nil {
+					if msgType, ok := msg["type"].(string); ok && msgType == "ping" {
+						// Send pong response via write channel
+						select {
+						case writeChan <- map[string]interface{}{
+							"type":      "pong",
+							"timestamp": msg["timestamp"],
+						}:
+						default:
+							log.Printf("Write channel full, skipping pong")
+						}
+					}
+				}
+			}
+		}
+	})
+}
+
 // Helper function to marshal JSON
 func mustMarshal(v interface{}) []byte {
 	data, err := json.Marshal(v)
@@ -390,27 +589,55 @@ func (h *detectHandler) HandleVideoStream() fiber.Handler {
 		// Register client
 		videoHub.register <- client
 
-		// Send confirmation (with mutex)
-		client.writeMux.Lock()
-		c.WriteJSON(fiber.Map{
-			"status":  "connected",
-			"message": "Subscribed to video stream",
-		})
-		client.writeMux.Unlock()
+		// Create channels for write operations
+		writeChan := make(chan interface{}, 100)
+		done := make(chan struct{})
+		var closeOnce sync.Once
 
-		// Start goroutine to write messages
+		// Start single write goroutine
 		go func() {
 			defer func() {
 				videoHub.unregister <- client
 			}()
 
-			for message := range client.send {
-				client.writeMux.Lock()
-				err := c.WriteMessage(websocket.TextMessage, message)
-				client.writeMux.Unlock()
+			// Send initial confirmation
+			if err := c.WriteJSON(fiber.Map{
+				"status":  "connected",
+				"message": "Subscribed to video stream",
+			}); err != nil {
+				log.Printf("Error sending initial message: %v", err)
+				closeOnce.Do(func() { close(done) })
+				return
+			}
 
-				if err != nil {
-					log.Printf("Error writing video frame: %v", err)
+			for {
+				select {
+				case message, ok := <-client.send:
+					if !ok {
+						closeOnce.Do(func() { close(done) })
+						return
+					}
+					if err := c.WriteMessage(websocket.TextMessage, message); err != nil {
+						log.Printf("Error writing video frame: %v", err)
+						closeOnce.Do(func() { close(done) })
+						return
+					}
+				case msg := <-writeChan:
+					switch m := msg.(type) {
+					case []byte:
+						if err := c.WriteMessage(websocket.PongMessage, m); err != nil {
+							log.Printf("Error writing pong: %v", err)
+							closeOnce.Do(func() { close(done) })
+							return
+						}
+					case map[string]interface{}:
+						if err := c.WriteJSON(m); err != nil {
+							log.Printf("Error writing JSON: %v", err)
+							closeOnce.Do(func() { close(done) })
+							return
+						}
+					}
+				case <-done:
 					return
 				}
 			}
@@ -423,14 +650,17 @@ func (h *detectHandler) HandleVideoStream() fiber.Handler {
 				if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
 					log.Printf("Video client unexpected close: %v", err)
 				}
+				closeOnce.Do(func() { close(done) })
 				break
 			}
 
-			// Handle ping with mutex
+			// Handle ping - send pong via write channel
 			if messageType == websocket.PingMessage {
-				client.writeMux.Lock()
-				c.WriteMessage(websocket.PongMessage, nil)
-				client.writeMux.Unlock()
+				select {
+				case writeChan <- []byte(nil):
+				default:
+					log.Printf("Write channel full, skipping pong")
+				}
 			}
 
 			// Handle text messages (e.g., ping from client)
@@ -438,13 +668,15 @@ func (h *detectHandler) HandleVideoStream() fiber.Handler {
 				var msg map[string]interface{}
 				if err := json.Unmarshal(payload, &msg); err == nil {
 					if msgType, ok := msg["type"].(string); ok && msgType == "ping" {
-						// Send pong response
-						client.writeMux.Lock()
-						c.WriteJSON(map[string]interface{}{
+						// Send pong response via write channel
+						select {
+						case writeChan <- map[string]interface{}{
 							"type":      "pong",
 							"timestamp": msg["timestamp"],
-						})
-						client.writeMux.Unlock()
+						}:
+						default:
+							log.Printf("Write channel full, skipping pong")
+						}
 					}
 				}
 			}

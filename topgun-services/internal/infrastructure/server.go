@@ -37,7 +37,7 @@ type Server struct {
 func NewServer(version, buildTag, runEnv string) (server *Server, err error) {
 	// Init server
 	server = &Server{
-		PrdMode: true,
+		PrdMode: false,
 		// PrdMode: true,
 		Version: version,
 		Build:   buildTag,

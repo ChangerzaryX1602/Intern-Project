@@ -19,12 +19,14 @@ from ultralytics import YOLO
 from model_utils import load_latest_model, get_latest_model
 
 # ==================== Configuration ====================
-GO_SERVER_URL = "ws://localhost:8080"
+GO_SERVER_URL = "ws://192.168.8.201:8080"
 WEBSOCKET_PATH = "/ws/video-input"
-TARGET_FPS = 30
-JPEG_QUALITY = 80
+TARGET_FPS = 5  # Reduced to 5 FPS
+JPEG_QUALITY = 70  # Reduced quality for smaller size
 CONF_THRESHOLD = 0.6
 IOU_THRESHOLD = 0.4
+TARGET_WIDTH = 854  # 480p width
+TARGET_HEIGHT = 480  # 480p height
 
 # ==================== Global Variables ====================
 model = None
@@ -73,7 +75,7 @@ def initialize_model():
     
     if model is None:
         # Try default model
-        default_path = "models/eiei1.pt"
+        default_path = "best_drone_detector.pt"
         if os.path.exists(default_path):
             print(f"📝 Using default model: {default_path}")
             model = YOLO(default_path)
@@ -128,7 +130,8 @@ def process_video(video_path, display=False):
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     
     print(f"📺 Video info:")
-    print(f"   Resolution: {width}x{height}")
+    print(f"   Original Resolution: {width}x{height}")
+    print(f"   Target Resolution: {TARGET_WIDTH}x{TARGET_HEIGHT} (480p)")
     print(f"   FPS: {fps:.2f}")
     print(f"   Total frames: {total_frames}")
     print(f"   Duration: {total_frames/fps:.2f}s\n")
@@ -150,8 +153,11 @@ def process_video(video_path, display=False):
             
             frame_count += 1
             
-            # Run YOLO detection
-            results = model(frame, conf=CONF_THRESHOLD, iou=IOU_THRESHOLD, verbose=False)
+            # Resize frame to 480p
+            frame_resized = cv2.resize(frame, (TARGET_WIDTH, TARGET_HEIGHT))
+            
+            # Run YOLO detection on resized frame
+            results = model(frame_resized, conf=CONF_THRESHOLD, iou=IOU_THRESHOLD, verbose=False)
             
             # Get annotated frame with bounding boxes
             annotated_frame = results[0].plot()
@@ -173,8 +179,8 @@ def process_video(video_path, display=False):
                 'timestamp': time.time(),
                 'frame_number': frame_count,
                 'detections': detections,
-                'width': width,
-                'height': height,
+                'width': TARGET_WIDTH,
+                'height': TARGET_HEIGHT,
                 'model': os.path.basename(current_model_path)
             }
             
@@ -242,7 +248,7 @@ def process_video(video_path, display=False):
 def main():
     """Main entry point"""
     # Declare globals first
-    global GO_SERVER_URL, TARGET_FPS, JPEG_QUALITY, CONF_THRESHOLD
+    global GO_SERVER_URL, TARGET_FPS, JPEG_QUALITY, CONF_THRESHOLD, TARGET_WIDTH, TARGET_HEIGHT
     
     parser = argparse.ArgumentParser(
         description='Stream video with YOLO detection to Go server via WebSocket'
@@ -253,11 +259,15 @@ def main():
     parser.add_argument('--server', type=str, default=GO_SERVER_URL,
                        help=f'Go server URL (default: {GO_SERVER_URL})')
     parser.add_argument('--fps', type=int, default=TARGET_FPS,
-                       help=f'Target FPS (default: {TARGET_FPS})')
+                       help=f'Target FPS (default: {TARGET_FPS}, max recommended: 5 for bandwidth)')
     parser.add_argument('--quality', type=int, default=JPEG_QUALITY,
-                       help=f'JPEG quality 0-100 (default: {JPEG_QUALITY})')
+                       help=f'JPEG quality 0-100 (default: {JPEG_QUALITY}, lower = smaller size)')
     parser.add_argument('--conf', type=float, default=CONF_THRESHOLD,
                        help=f'Confidence threshold (default: {CONF_THRESHOLD})')
+    parser.add_argument('--width', type=int, default=TARGET_WIDTH,
+                       help=f'Target width (default: {TARGET_WIDTH})')
+    parser.add_argument('--height', type=int, default=TARGET_HEIGHT,
+                       help=f'Target height (default: {TARGET_HEIGHT})')
     
     args = parser.parse_args()
     
@@ -266,6 +276,8 @@ def main():
     TARGET_FPS = args.fps
     JPEG_QUALITY = args.quality
     CONF_THRESHOLD = args.conf
+    TARGET_WIDTH = args.width
+    TARGET_HEIGHT = args.height
     
     print("\n")
     print("="*60)

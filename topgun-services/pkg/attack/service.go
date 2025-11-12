@@ -1,6 +1,7 @@
 package attack
 
 import (
+	"topgun-services/pkg/detect"
 	"topgun-services/pkg/domain"
 	"topgun-services/pkg/models"
 )
@@ -16,7 +17,15 @@ func (s *attackService) GetAttacks(pagination models.Pagination, filter models.S
 	return s.repository.GetAttacks(pagination, filter)
 }
 func (s *attackService) CreateAttack(attack models.Attack) (*models.Attack, error) {
-	return s.repository.CreateAttack(attack)
+	createdAttack, err := s.repository.CreateAttack(attack)
+	if err != nil {
+		return nil, err
+	}
+
+	// Broadcast attack data to all WebSocket clients
+	detect.BroadcastAttack(createdAttack)
+
+	return createdAttack, nil
 }
 func (s *attackService) UpdateAttack(id uint, attack models.Attack) (*models.Attack, error) {
 	return s.repository.UpdateAttack(id, attack)
