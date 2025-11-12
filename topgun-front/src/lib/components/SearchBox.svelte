@@ -11,15 +11,15 @@
 	let {
 		value = $bindable(),
 		placeholder = 'Search...',
-		label = '🔍 Search',
+		label = '',
 		icon = '🔍',
 		onSearch,
 		onInput
 	}: Props = $props();
 </script>
 
-<div class="px-5 py-5 border-b border-gray-200 bg-gradient-to-br from-gray-50 to-gray-100">
-	<label for="search-input" class="block text-sm font-semibold text-gray-700 mb-2">
+<div class="px-5 py-1">
+	<label for="search-input" class="block text-sm font-semibold text-gray-700">
 		{label}
 	</label>
 	<div class="flex gap-2">
