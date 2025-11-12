@@ -3,6 +3,7 @@ package models
 import (
 	"crypto"
 
+	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/session"
 	"github.com/gofiber/storage/redis"
@@ -19,6 +20,7 @@ type Resources struct {
 	RedisStorage   *redis.Storage
 	JwtResources   *JwtResources
 	SessConfig     session.Config
+	MQTTClient     mqtt.Client
 }
 
 type JwtResources struct {

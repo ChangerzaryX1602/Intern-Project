@@ -33,6 +33,11 @@ func NewDetectHandler(router fiber.Router, service domain.DetectService) {
 	router.Delete("/:id", h.DeleteDetect())
 }
 
+// NewDetectHandlerForWebSocket creates handler for WebSocket routes
+func NewDetectHandlerForWebSocket() *detectHandler {
+	return &detectHandler{}
+}
+
 // @Summary CreateDetect
 // @Tags Detect
 // @Description Create a new detect with file upload

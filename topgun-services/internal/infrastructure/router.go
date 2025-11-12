@@ -11,10 +11,13 @@ import (
 	"topgun-services/pkg/detect"
 	"topgun-services/pkg/logs"
 	"topgun-services/pkg/models"
+	"topgun-services/pkg/mqtt"
 	"topgun-services/pkg/user"
 
 	swagger "github.com/arsmn/fiber-swagger/v2"
+	"github.com/gofiber/contrib/websocket"
 	"github.com/gofiber/fiber/v2"
+	"github.com/spf13/viper"
 )
 
 // SetupRoutes is the Router for GoFiber App
@@ -55,12 +58,44 @@ func (s *Server) SetupRoutes(app *fiber.App) {
 	cameraService := camera.NewCameraService(cameraRepository)
 	detectService := detect.NewDetectService(detectRepository)
 	attackService := attack.NewAttackService(attackRepository)
+
+	// MQTT Service
+	var mqttService *mqtt.Service
+	if s.MQTTClient != nil && s.MQTTClient.IsConnected() {
+		mqttTopic := viper.GetString("mqtt.topic")
+		if mqttTopic == "" {
+			mqttTopic = "topgun/ai"
+		}
+		mqttService = mqtt.NewService(s.MQTTClient, mqttTopic)
+		// Subscribe to the topic with default handler
+		if err := mqttService.Subscribe(nil); err != nil {
+			fmt.Printf("Warning: failed to subscribe to MQTT topic: %v\n", err)
+		}
+	}
+
 	// App Routes
 	auth.NewAuthHandler(groupApiV1.Group("/auth"), routerResource, authService, userService)
 	user.NewUserHandler(groupApiV1.Group("/users"), routerResource, userService, authService)
 	camera.NewCameraHandler(groupApiV1.Group("/camera"), routerResource, cameraService)
 	detect.NewDetectHandler(groupApiV1.Group("/detect"), detectService)
 	attack.NewAttackHandler(groupApiV1.Group("/attack"), attackService)
+
+	// WebSocket routes for video streaming
+	videoHandler := detect.NewDetectHandlerForWebSocket()
+	app.Use("/ws", func(c *fiber.Ctx) error {
+		if websocket.IsWebSocketUpgrade(c) {
+			return c.Next()
+		}
+		return fiber.ErrUpgradeRequired
+	})
+	app.Get("/ws/video-input", videoHandler.HandleVideoInput())   // Python sends video here
+	app.Get("/ws/video-stream", videoHandler.HandleVideoStream()) // Clients view video here
+
+	// MQTT Routes
+	if mqttService != nil {
+		mqttHandler := mqtt.NewHandler(mqttService)
+		mqtt.SetupRoutes(groupApiV1.Group("/mqtt"), mqttHandler)
+	}
 
 	// Log routes
 	groupApiV1.Get("/logs", logs.GetLogsHandler(s.LogDbConn))

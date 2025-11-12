@@ -88,6 +88,21 @@ definitions:
       token:
         type: string
     type: object
+  mqtt.FilePathRequest:
+    properties:
+      encode_base64:
+        example: true
+        type: boolean
+      file_path:
+        example: ./models/best.pt
+        type: string
+    type: object
+  mqtt.PublishRequest:
+    properties:
+      message:
+        example: Hello from Go server
+        type: string
+    type: object
 info:
   contact: {}
   title: KKU GS ADMISSION SERVICES API
@@ -557,6 +572,156 @@ paths:
       summary: GetDetectsByCameras
       tags:
       - Detect
+  /api/v1/mqtt/publish:
+    post:
+      consumes:
+      - application/json
+      description: Publish a message to the configured MQTT topic (topgun/ai)
+      parameters:
+      - description: Message to publish
+        in: body
+        name: message
+        required: true
+        schema:
+          $ref: '#/definitions/mqtt.PublishRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Publish message to MQTT
+      tags:
+      - MQTT
+  /api/v1/mqtt/publish-json:
+    post:
+      consumes:
+      - application/json
+      description: Publish JSON data to the configured MQTT topic (topgun/ai)
+      parameters:
+      - description: JSON data to publish
+        in: body
+        name: data
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Publish JSON to MQTT
+      tags:
+      - MQTT
+  /api/v1/mqtt/send-file:
+    post:
+      consumes:
+      - application/json
+      description: Send a file from the server filesystem through MQTT topic
+      parameters:
+      - description: File path on server
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/mqtt.FilePathRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Send file from server path via MQTT
+      tags:
+      - MQTT
+  /api/v1/mqtt/status:
+    get:
+      description: Check if the MQTT client is connected to the broker
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get MQTT connection status
+      tags:
+      - MQTT
+  /api/v1/mqtt/upload-file:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Upload a file (e.g., .pt model file) and send it through MQTT topic
+      parameters:
+      - description: File to upload and send (.pt, .pth, etc.)
+        in: formData
+        name: file
+        required: true
+        type: file
+      - description: 'Encode file as base64 (default: true)'
+        in: formData
+        name: encode_base64
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Upload and send file via MQTT
+      tags:
+      - MQTT
   /api/v1/users/:
     get:
       consumes:

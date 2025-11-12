@@ -45,6 +45,36 @@ type DetectionMessage struct {
 	MimeType  string                     `json:"mime_type"`  // image/jpeg, image/png, etc.
 }
 
+// Video frame message from Python
+type VideoFrameMessage struct {
+	Frame       string  `json:"frame"`        // Base64 encoded JPEG
+	Timestamp   float64 `json:"timestamp"`    // Unix timestamp
+	FrameNumber int     `json:"frame_number"` // Frame sequence number
+	Detections  int     `json:"detections"`   // Number of objects detected
+	Width       int     `json:"width"`        // Frame width
+	Height      int     `json:"height"`       // Frame height
+	Model       string  `json:"model"`        // Model name used
+}
+
+// Video stream hub for broadcasting frames to all clients
+type VideoHub struct {
+	clients    map[*VideoClient]bool
+	broadcast  chan *VideoFrameMessage
+	register   chan *VideoClient
+	unregister chan *VideoClient
+	mutex      sync.RWMutex
+}
+
+// Video client structure
+type VideoClient struct {
+	conn     *websocket.Conn
+	send     chan []byte
+	writeMux sync.Mutex // Protect concurrent writes
+}
+
+// Global video hub instance
+var videoHub *VideoHub
+
 // Global hub instance
 var hub *Hub
 
@@ -56,6 +86,62 @@ func init() {
 		unregister: make(chan *Client),
 	}
 	go hub.run()
+
+	// Initialize video hub
+	videoHub = &VideoHub{
+		clients:    make(map[*VideoClient]bool),
+		broadcast:  make(chan *VideoFrameMessage, 100),
+		register:   make(chan *VideoClient),
+		unregister: make(chan *VideoClient),
+	}
+	go videoHub.run()
+}
+
+// Run video hub to handle video client connections and broadcasts
+func (vh *VideoHub) run() {
+	for {
+		select {
+		case client := <-vh.register:
+			vh.mutex.Lock()
+			vh.clients[client] = true
+			vh.mutex.Unlock()
+			log.Printf("Video client connected. Total clients: %d", len(vh.clients))
+
+		case client := <-vh.unregister:
+			vh.mutex.Lock()
+			if _, ok := vh.clients[client]; ok {
+				delete(vh.clients, client)
+				close(client.send)
+				log.Printf("Video client disconnected. Total clients: %d", len(vh.clients))
+			}
+			vh.mutex.Unlock()
+
+		case frame := <-vh.broadcast:
+			vh.mutex.RLock()
+			frameData := mustMarshal(frame)
+			for client := range vh.clients {
+				select {
+				case client.send <- frameData:
+				default:
+					// Client buffer full, disconnect
+					close(client.send)
+					delete(vh.clients, client)
+				}
+			}
+			vh.mutex.RUnlock()
+		}
+	}
+}
+
+// Broadcast video frame to all connected clients
+func BroadcastVideoFrame(frame *VideoFrameMessage) {
+	if videoHub != nil {
+		select {
+		case videoHub.broadcast <- frame:
+		default:
+			log.Println("Video broadcast channel full, dropping frame")
+		}
+	}
 }
 
 // Run hub to handle client connections and broadcasts
@@ -254,4 +340,114 @@ func WebSocketUpgrade() fiber.Handler {
 		}
 		return fiber.ErrUpgradeRequired
 	}
+}
+
+// HandleVideoInput - WebSocket handler for receiving video frames from Python
+func (h *detectHandler) HandleVideoInput() fiber.Handler {
+	return websocket.New(func(c *websocket.Conn) {
+		log.Println("Python video source connected")
+		defer func() {
+			log.Println("Python video source disconnected")
+			c.Close()
+		}()
+
+		// Send confirmation
+		c.WriteJSON(fiber.Map{
+			"status":  "connected",
+			"message": "Ready to receive video frames",
+		})
+
+		// Read frames from Python
+		for {
+			var frame VideoFrameMessage
+			if err := c.ReadJSON(&frame); err != nil {
+				if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+					log.Printf("Unexpected close error: %v", err)
+				}
+				break
+			}
+
+			// Broadcast frame to all viewer clients
+			BroadcastVideoFrame(&frame)
+
+			// Log every 30 frames
+			if frame.FrameNumber%30 == 0 {
+				log.Printf("Received frame #%d, detections: %d, viewers: %d",
+					frame.FrameNumber, frame.Detections, len(videoHub.clients))
+			}
+		}
+	})
+}
+
+// HandleVideoStream - WebSocket handler for clients to view the video stream
+func (h *detectHandler) HandleVideoStream() fiber.Handler {
+	return websocket.New(func(c *websocket.Conn) {
+		client := &VideoClient{
+			conn: c,
+			send: make(chan []byte, 256),
+		}
+
+		// Register client
+		videoHub.register <- client
+
+		// Send confirmation (with mutex)
+		client.writeMux.Lock()
+		c.WriteJSON(fiber.Map{
+			"status":  "connected",
+			"message": "Subscribed to video stream",
+		})
+		client.writeMux.Unlock()
+
+		// Start goroutine to write messages
+		go func() {
+			defer func() {
+				videoHub.unregister <- client
+			}()
+
+			for message := range client.send {
+				client.writeMux.Lock()
+				err := c.WriteMessage(websocket.TextMessage, message)
+				client.writeMux.Unlock()
+
+				if err != nil {
+					log.Printf("Error writing video frame: %v", err)
+					return
+				}
+			}
+		}()
+
+		// Keep connection alive and handle ping/pong
+		for {
+			messageType, payload, err := c.ReadMessage()
+			if err != nil {
+				if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+					log.Printf("Video client unexpected close: %v", err)
+				}
+				break
+			}
+
+			// Handle ping with mutex
+			if messageType == websocket.PingMessage {
+				client.writeMux.Lock()
+				c.WriteMessage(websocket.PongMessage, nil)
+				client.writeMux.Unlock()
+			}
+
+			// Handle text messages (e.g., ping from client)
+			if messageType == websocket.TextMessage {
+				var msg map[string]interface{}
+				if err := json.Unmarshal(payload, &msg); err == nil {
+					if msgType, ok := msg["type"].(string); ok && msgType == "ping" {
+						// Send pong response
+						client.writeMux.Lock()
+						c.WriteJSON(map[string]interface{}{
+							"type":      "pong",
+							"timestamp": msg["timestamp"],
+						})
+						client.writeMux.Unlock()
+					}
+				}
+			}
+		}
+	})
 }

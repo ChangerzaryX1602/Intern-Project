@@ -6,19 +6,21 @@ import (
 	"topgun-services/internal/datasources"
 	"topgun-services/pkg/models"
 
+	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/gofiber/storage/redis"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/valyala/fasthttp"
 	"gorm.io/gorm"
 )
 
-func NewResources(fasthttpClient *fasthttp.Client, mainDbConn *gorm.DB, logDbConn *gorm.DB, redisStorage *redis.Storage, jwtResources *models.JwtResources) models.Resources {
+func NewResources(fasthttpClient *fasthttp.Client, mainDbConn *gorm.DB, logDbConn *gorm.DB, redisStorage *redis.Storage, jwtResources *models.JwtResources, mqttClient mqtt.Client) models.Resources {
 	return models.Resources{
 		FastHTTPClient: fasthttpClient,
 		MainDbConn:     mainDbConn,
 		LogDbConn:      logDbConn,
 		RedisStorage:   redisStorage,
 		JwtResources:   jwtResources,
+		MQTTClient:     mqttClient,
 	}
 }
 

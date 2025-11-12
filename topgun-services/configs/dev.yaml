@@ -51,3 +51,8 @@ jwt:
   private: "./internal/assets/dev/jwt/privkey.pem"
   # openssl ec -in privkey.pem -pubout -out pubkey.pem
   public: "./internal/assets/dev/jwt/pubkey.pem"
+
+mqtt:
+  broker: "tcp://localhost:1883"
+  client_id: "topgun-services"
+  topic: "topgun/ai"

@@ -13,6 +13,7 @@ import (
 	"topgun-services/pkg/models"
 	"topgun-services/pkg/utils"
 
+	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/goccy/go-json"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
@@ -20,6 +21,7 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/gofiber/fiber/v2/middleware/session"
 	"github.com/gofiber/storage/redis"
+	"github.com/google/uuid"
 	"github.com/spf13/viper"
 	"gorm.io/gorm"
 )
@@ -35,7 +37,7 @@ type Server struct {
 func NewServer(version, buildTag, runEnv string) (server *Server, err error) {
 	// Init server
 	server = &Server{
-		PrdMode: (viper.GetString("app.env") == "production") || (viper.GetString("app.env") == "uat"),
+		PrdMode: true,
 		// PrdMode: true,
 		Version: version,
 		Build:   buildTag,
@@ -99,8 +101,16 @@ func NewServer(version, buildTag, runEnv string) (server *Server, err error) {
 	// if err != nil {
 	// 	log.Printf("failed to connect to Redis: %v", err)
 	// }
+
+	// Connect to MQTT
+	mqttClient, err := connectToMQTT()
+	if err != nil {
+		log.Printf("Warning: failed to connect to MQTT: %v", err)
+		// Don't return error, allow server to start without MQTT
+	}
+
 	// init app resources
-	server.Resources = NewResources(fastHTTPClient, mainDbConn, logDbConn, nil, jwtResources)
+	server.Resources = NewResources(fastHTTPClient, mainDbConn, logDbConn, nil, jwtResources, mqttClient)
 
 	// something that use resources place here
 
@@ -127,6 +137,41 @@ func connectToRedis() (redisStorage *redis.Storage, err error) {
 	}
 	log.Printf("Connected to Redis at %s:%d", viper.GetString("db.redis.host"), viper.GetInt("db.redis.port"))
 	return store, nil
+}
+
+func connectToMQTT() (mqtt.Client, error) {
+	broker := viper.GetString("mqtt.broker")
+	if broker == "" {
+		broker = "tcp://localhost:1883"
+	}
+
+	// clientID := viper.GetString("mqtt.client_id")
+	// if clientID == "" {
+	uuid := uuid.New()
+	clientID := "topgun-services-" + uuid.String()
+	// }
+
+	opts := mqtt.NewClientOptions()
+	opts.AddBroker(broker)
+	opts.SetClientID(clientID)
+	opts.SetAutoReconnect(true)
+	opts.SetConnectRetry(true)
+	opts.SetConnectRetryInterval(5 * time.Second)
+	opts.SetMaxReconnectInterval(30 * time.Second)
+	opts.SetOnConnectHandler(func(client mqtt.Client) {
+		log.Println("Connected to MQTT broker")
+	})
+	opts.SetConnectionLostHandler(func(client mqtt.Client, err error) {
+		log.Printf("MQTT connection lost: %v", err)
+	})
+
+	client := mqtt.NewClient(opts)
+	if token := client.Connect(); token.Wait() && token.Error() != nil {
+		return nil, fmt.Errorf("failed to connect to MQTT broker: %w", token.Error())
+	}
+
+	log.Printf("Connected to MQTT broker at %s", broker)
+	return client, nil
 }
 func (s *Server) Run() (err error) {
 	app := fiber.New(fiber.Config{
@@ -189,6 +234,10 @@ func (s *Server) Run() (err error) {
 	// Your cleanup tasks go here
 	if s.RedisStorage != nil {
 		s.RedisStorage.Close()
+	}
+	if s.MQTTClient != nil && s.MQTTClient.IsConnected() {
+		s.MQTTClient.Disconnect(250)
+		log.Println("Disconnected from MQTT broker")
 	}
 	fmt.Println("Successful shutdown.")
 	return
