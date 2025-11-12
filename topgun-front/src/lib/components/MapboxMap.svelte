@@ -199,7 +199,7 @@
 				.setLngLat(marker.lngLat);
 
 			if (marker.popup) {
-				mapboxMarker.setPopup(new mapboxgl.Popup().setHTML(marker.popup));
+				mapboxMarker.setPopup(new mapboxgl.Popup({ anchor: 'left' }).setHTML(marker.popup));
 			}
 
 			mapboxMarker.addTo(map!);
@@ -269,7 +269,8 @@
 			container: mapContainer,
 			style,
 			center,
-			zoom
+			zoom,
+			attributionControl: false
 		});
 
 		// Add navigation controls

@@ -155,12 +155,18 @@
 							const size = o.size ?? '';
 
 							const popup = `
-								<div style="font-size:13px">
-									<strong>${cameraName}</strong><br/>
-									${objType} ${objId}<br/>
+								<div style="font-size:13px; max-width: 300px;">
+									${data.image_data ? `<img src="data:${data.mime_type || 'image/jpeg'};base64,${data.image_data}" style="width: 100%; height: auto; max-height: 200px; border-radius: 4px; margin-top: 8px;">` : ''}
+									<br/>
+									<strong>${objType} ${objId}</strong><br/>
+									${cameraName}<br/>
 									${objective ? `objective: ${objective}<br/>` : ''}
 									${size ? `size: ${size}<br/>` : ''}
-									${new Date(data.timestamp).toLocaleString()}
+									${new Date(data.timestamp).toLocaleString()}<br/>
+									<br/>
+									<strong>Location:</strong><br/>
+									Latitude: ${lat.toFixed(6)}<br/>
+									Longitude: ${lng.toFixed(6)}<br/>
 								</div>`;
 
 						const color = (o.objective && String(o.objective).toLowerCase() === 'our') ? '#10b981' : '#ef4444';

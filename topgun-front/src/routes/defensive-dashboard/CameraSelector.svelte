@@ -38,6 +38,34 @@
 		const regex = new RegExp(`(${keyword.trim()})`, 'gi');
 		return text.replace(regex, '<mark>$1</mark>');
 	}
+
+	// Format time difference for online status
+	function getTimeAgo(timestamp: string): string {
+		const date = new Date(timestamp);
+		const now = new Date();
+		const diffMs = now.getTime() - date.getTime();
+		const diffMins = Math.floor(diffMs / 60000);
+		const diffHours = Math.floor(diffMs / 3600000);
+		const diffDays = Math.floor(diffMs / 86400000);
+
+		if (diffMins < 1) return 'just now';
+		if (diffMins < 60) return `${diffMins}m ago`;
+		if (diffHours < 24) return `${diffHours}h ago`;
+		return `${diffDays}d ago`;
+	}
+
+	// Format full date and time for offline status
+	function formatDateTime(timestamp: string): string {
+		const date = new Date(timestamp);
+		return date.toLocaleString('en-US', {
+			year: 'numeric',
+			month: 'short',
+			day: '2-digit',
+			hour: '2-digit',
+			minute: '2-digit',
+			second: '2-digit'
+		});
+	}
 </script>
 
 <aside class="w-[30%] bg-white rounded-xl shadow-md flex flex-col overflow-hidden">
@@ -110,6 +138,10 @@
 									Connected
 								</div>
 							{/if}
+							<div class="camera-location">
+								<span class="icon-small">📍</span>
+								{@html highlightText(camera.location, searchName)}
+							</div>
 						</div>
 					</button>
 				{/each}
