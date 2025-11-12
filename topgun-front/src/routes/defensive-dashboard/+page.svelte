@@ -29,6 +29,12 @@
 	let mapCenter: [number, number] = $state([100.5018, 13.7563]);
 	let markers = $state<Array<{ lngLat: [number, number]; popup?: string; color?: string }>>([]);
 
+	// Search history state
+	let startDate = $state<string>('');
+	let endDate = $state<string>('');
+	let filteredDetections = $state<Detection[]>([]);
+	let searchHistory = $state<Array<{ startDate: string; endDate: string; count: number }>>([]);
+
 	// WebSocket connections map (camera_id -> WebSocket)
 	let wsConnections = $state<Map<string, WebSocket>>(new Map());
 	let reconnectTimeouts = new Map<string, any>();
@@ -155,18 +161,12 @@
 							const size = o.size ?? '';
 
 							const popup = `
-								<div style="font-size:13px; max-width: 300px;">
-									${data.image_data ? `<img src="data:${data.mime_type || 'image/jpeg'};base64,${data.image_data}" style="width: 100%; height: auto; max-height: 200px; border-radius: 4px; margin-top: 8px;">` : ''}
-									<br/>
-									<strong>${objType} ${objId}</strong><br/>
-									${cameraName}<br/>
+								<div style="font-size:13px">
+									<strong>${cameraName}</strong><br/>
+									${objType} ${objId}<br/>
 									${objective ? `objective: ${objective}<br/>` : ''}
 									${size ? `size: ${size}<br/>` : ''}
-									${new Date(data.timestamp).toLocaleString()}<br/>
-									<br/>
-									<strong>Location:</strong><br/>
-									Latitude: ${lat.toFixed(6)}<br/>
-									Longitude: ${lng.toFixed(6)}<br/>
+									${new Date(data.timestamp).toLocaleString()}
 								</div>`;
 
 						const color = (o.objective && String(o.objective).toLowerCase() === 'our') ? '#10b981' : '#ef4444';
@@ -276,6 +276,50 @@
 		return camera ? camera.name : cameraId.substring(0, 8);
 	}
 
+	// Filter detections by date range
+	function filterDetectionsByDate() {
+		if (!startDate || !endDate) {
+			filteredDetections = [];
+			return;
+		}
+
+		const start = new Date(startDate);
+		const end = new Date(endDate);
+		end.setHours(23, 59, 59, 999); // Include entire end date
+
+		const filtered = detections.filter((detection) => {
+			const detectionDate = new Date(detection.detected_at);
+			return detectionDate >= start && detectionDate <= end;
+		});
+
+		filteredDetections = filtered;
+
+		// Add to search history
+		const historyEntry = {
+			startDate,
+			endDate,
+			count: filtered.length
+		};
+
+		searchHistory = [historyEntry, ...searchHistory.slice(0, 9)]; // Keep last 10 searches
+	}
+
+	// Format date for display
+	function formatDateDisplay(dateString: string): string {
+		const date = new Date(dateString);
+		const day = String(date.getDate()).padStart(2, '0');
+		const month = String(date.getMonth() + 1).padStart(2, '0');
+		const year = date.getFullYear();
+		return `${day}/${month}/${year}`;
+	}
+
+	// Clear search
+	function clearSearch() {
+		startDate = '';
+		endDate = '';
+		filteredDetections = [];
+	}
+
 	// Highlight matching text
 	function highlightText(text: string, keyword: string): string {
 		if (!keyword.trim()) return text;
@@ -331,42 +375,78 @@
 			onPrevPage={loadPrevPage}
 		/>
 
-		<section class="w-[70%] bg-white rounded-xl shadow-md overflow-hidden relative xl:w-[65%]">
-			<div class="w-full h-full bg-gray-300">
+		<section class="w-full bg-white rounded-xl shadow-md overflow-hidden relative flex">
+			<div class="h-full bg-gray-300 w-[70%]">
 				<MapboxMap accessToken={mapboxToken} center={mapCenter} zoom={12} {markers} />
+			</div>
+			<div class="bg-white w-[30%] flex flex-col justify-start items-center px-4 py-4 gap-4 border-b border-gray-200"> 
+				<label for="file-upload" class="block text-sm font-medium text-gray-700 w-full">ชื่อ model ที่ใช้อยู่ตอนนี้ <br>เลือกไฟล์ใหม่เพื่อ upload</label>
+				<input id="file-upload" type="file" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100" />
+				
+				<div class="w-full border-t border-gray-200 pt-2">
+					<div class="flex justify-between items-center mb-3">
+						<h2 class="m-0 text-lg flex items-center gap-2 text-gray-800 font-bold">
+							<span class="inline-block">📋</span>
+							All Detections
+							<span class="bg-indigo-500 text-white px-2 py-0.5 rounded-xl text-xs font-semibold">
+								{detections.length}
+							</span>
+						</h2>
+					</div>
+
+					<div class="flex gap-4 overflow-x-auto overflow-y-hidden py-2 flex-1 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 hover:scrollbar-thumb-gray-400">
+						{#if detections.length === 0}
+							<div class="flex flex-col items-center justify-center w-full p-8 text-center text-gray-400">
+								<div class="text-4xl mb-2 opacity-50">📷</div>
+								<p class="my-1 font-medium text-gray-600">No detections yet</p>
+								<small class="text-sm">Select cameras to start monitoring...</small>
+							</div>
+						{:else}
+							{#each detections as detection (detection.id)}
+								<DetectionCard
+									{detection}
+									isSelected={selectedDetection?.id === detection.id}
+									cameraName={getCameraName(detection.camera_id)}
+									onClick={() => selectDetection(detection)}
+								/>
+							{/each}
+						{/if}
+					</div>
+				</div>
 			</div>
 		</section>
 	</main>
 
 	<!-- Bottom Horizontal Detection List -->
-	<footer class="bg-white border-t-2 border-gray-200 px-6 py-4 max-h-[220px] flex flex-col">
-		<div class="flex justify-between items-center mb-3">
-			<h2 class="m-0 text-lg flex items-center gap-2 text-gray-800 font-bold">
-				<span class="inline-block">📋</span>
-				All Detections
-				<span class="bg-indigo-500 text-white px-2 py-0.5 rounded-xl text-xs font-semibold">
-					{detections.length}
-				</span>
-			</h2>
-		</div>
-
-		<div class="flex gap-4 overflow-x-auto overflow-y-hidden py-2 flex-1 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 hover:scrollbar-thumb-gray-400">
-			{#if detections.length === 0}
-				<div class="flex flex-col items-center justify-center w-full p-8 text-center text-gray-400">
-					<div class="text-4xl mb-2 opacity-50">📷</div>
-					<p class="my-1 font-medium text-gray-600">No detections yet</p>
-					<small class="text-sm">Select cameras to start monitoring...</small>
+	<div class="flex gap-6 px-6 py-2 h-[30%]">
+		<div class="bg-white rounded-xl shadow-md overflow-hidden relative w-[30%] flex flex-col gap-4 px-4 py-4"> 
+			<h1 class="text-lg font-bold text-gray-800">ค้นหาประวัติ</h1>
+			<div class="flex flex-col gap-3">
+				<div class="flex gap-3">
+					<div class="flex-1">
+						<label for="start-date" class="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+						<input id="start-date" type="date" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" />
+					</div>
+					<div class="flex-1">
+						<label for="end-date" class="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+						<input id="end-date" type="date" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" />
+					</div>
 				</div>
-			{:else}
-				{#each detections as detection (detection.id)}
-					<DetectionCard
-						{detection}
-						isSelected={selectedDetection?.id === detection.id}
-						cameraName={getCameraName(detection.camera_id)}
-						onClick={() => selectDetection(detection)}
-					/>
-				{/each}
-			{/if}
+			</div>
+			<div class="border-t border-gray-200 pt-3">
+				<h2 class="text-sm font-semibold text-gray-700 mb-2">แสดงประวัติการค้นหา</h2>
+				<div class="bg-gray-50 p-3 rounded-md shadow-inner h-24 overflow-y-auto border border-gray-200">
+					<p class="text-xs text-gray-500">ยังไม่มีประวัติการค้นหา</p>
+				</div>
+			</div>
 		</div>
-	</footer>
+		<section class="w-full bg-white rounded-xl shadow-md overflow-hidden relative flex">
+			<div class="h-full bg-gray-300 w-[73.5%]">
+				live stream
+			</div>
+			<div class="bg-white flex flex-col justify-center items-center"> 
+				ทิศทาง
+			</div>
+		</section>
+	</div>
 </div>
