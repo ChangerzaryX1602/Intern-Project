@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { goto } from "$app/navigation";
+
 	interface Props {
 		selectedCamerasCount: number;
 		detectionsCount: number;
@@ -37,22 +39,33 @@
 	<div class="flex justify-between items-center gap-8 max-w-full">
 		<div class="flex items-center gap-4">
 			<!-- <div class="text-5xl animate-bounce-slow">🛡️</div> -->
+			 <button
+				onclick={() => goto("/")}
+				class="p-2 rounded-lg bg-white/20 hover:bg-white/30 transition-colors cursor-pointer"
+				title="Back to home"
+				aria-label="Back to home"
+			>
+				<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+				</svg>
+			</button>
+
 			<div>
 				<h1 class="m-0 text-xl font-bold">Defensive Dashboard</h1>
 				<p class="m-0 opacity-90 text-xs">Real-time Detection Monitoring</p>
 			</div>
-		</div>
 
-		<div class="flex items-center gap-6">
 			<!-- Server Time - Real-time display -->
-			<div class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium">
+			<div class="flex items-center gap-2 px-4 py-2 text-sm font-medium border-l border-white/50">
 				<span class="text-lg">🕐</span>
 				<div>
 					<div class="text-xs opacity-75">Server Time</div>
 					<div class="font-mono font-bold">{formatDateTime(currentTime)}</div>
 				</div>
 			</div>
+		</div>
 
+		<div class="flex items-center gap-6">
 			<!-- Commander Info -->
 			<div class="flex items-center gap-2 px-4 py-3 bg-white/20 rounded-lg text-sm font-medium">
 				<span class="text-lg">👨‍💼</span>

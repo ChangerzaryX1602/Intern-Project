@@ -768,28 +768,38 @@
 
 <div class="w-screen h-screen flex flex-col bg-gray-100 overflow-hidden">
 	<!-- Header -->
-	 	<button onclick={() => goto("/")}>Back</button>
-
     <header class="bg-gradient-to-br from-indigo-500 to-purple-600 text-white px-8 py-2 shadow-lg z-10">
         <div class="flex justify-between items-center gap-8 max-w-full">
             <div class="flex items-center gap-4">
                 <!-- <div class="text-5xl animate-bounce-slow">🛡️</div> -->
+
+                <button
+                    onclick={() => goto("/")}
+                    class="p-2 rounded-lg bg-white/20 hover:bg-white/30 transition-colors cursor-pointer"
+                    title="Back to home"
+                    aria-label="Back to home"
+                >
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                    </svg>
+                </button>
+
                 <div>
                     <h1 class="m-0 text-xl font-bold">Battle Dashboard</h1>
                     <p class="m-0 opacity-90 text-xs">Drone & Camera Monitoring System</p>
                 </div>
-            </div>
 
-            <div class="flex items-center gap-6">
                 <!-- Server Time - Real-time display -->
-                <div class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium">
+                <div class="flex items-center gap-2 px-4 py-2 text-sm font-medium border-l border-white/50">
                     <span class="text-lg">🕐</span>
                     <div>
                         <div class="text-xs opacity-75">Server Time</div>
                         <div class="font-mono font-bold">{formatDateTime(currentTime)}</div>
                     </div>
                 </div>
+            </div>
 
+            <div class="flex items-center gap-6">
                 <!-- Commander Info -->
                 <div class="flex items-center gap-2 px-4 py-3 bg-white/20 rounded-lg text-sm font-medium">
                     <span class="text-lg">👨‍💼</span>
@@ -806,7 +816,7 @@
 			<!-- Drone Search & List -->
 			<div class="bg-white rounded-xl shadow-md flex flex-col overflow-hidden">
 				<div class="px-4 py-2 border-b border-gray-200 bg-gradient-to-br from-purple-50 to-purple-100">
-					<div class="flex justify-between items-center mb-2">
+					<div class="flex justify-between items-center">
 						<h2 class="m-0 text-base text-gray-800 font-bold flex items-center gap-2">
 							<span>🚁</span>
 							Offense
@@ -940,7 +950,7 @@
 			<!-- Camera Search & List -->
 			<div class="bg-white rounded-xl shadow-md flex flex-col overflow-hidden">
 				<div class="px-4 py-2 border-b border-gray-200 bg-gradient-to-br from-blue-50 to-blue-100">
-					<div class="flex justify-between items-center mb-2">
+					<div class="flex justify-between items-center">
 						<h2 class="m-0 text-base text-gray-800 font-bold flex items-center gap-2">
 							<span>📹</span>
 							Defense
@@ -967,7 +977,7 @@
 							onkeydown={(e) => e.key === 'Enter' && selectCamera(camera)}
 						>
 							<div class="flex justify-between items-center mb-2">
-								<span class="text-sm font-bold text-gray-800">{camera.name}</span>
+								<span class="text-sm font-bold text-gray-800 mr-2">{camera.name}</span>
 								<span
 									class="w-1.5 h-1.5 rounded-full"
 									class:bg-green-500={camera.status === 'online'}
@@ -976,7 +986,7 @@
 							</div>
 							<div class="text-xs text-gray-600 flex items-center gap-1">
 								<span>📍</span>
-								{camera.coordinates.lat.toFixed(4)}, {camera.coordinates.lng.toFixed(4)}
+								lat. {camera.coordinates.lat.toFixed(4)}, long. {camera.coordinates.lng.toFixed(4)}
 							</div>
 						</div>
 					{/each}
@@ -1009,20 +1019,17 @@
                 <div class="w-1/3 bg-white rounded-xl shadow-md p-3">
 					<!-- Model Upload Section - SAME AS DEFENSIVE DASHBOARD -->
 					<div class="w-full">
-						<div class="bg-gradient-to-r from-indigo-50 to-blue-50 rounded-lg p-4 mb-3">
-							<div class="flex items-center gap-2 mb-2">
+						<div class="bg-gradient-to-r from-indigo-50 to-blue-50 rounded-lg p-2 mb-3">
+							<div class="flex items-center gap-2">
 								<span class="text-2xl">🤖</span>
 								<div>
 									<h3 class="font-bold text-gray-800 text-sm">Current Model</h3>
 									<p class="text-xs text-gray-600">YOLO v8 NCNN Model 960</p>
 								</div>
 							</div>
-							<div class="bg-white rounded px-2 py-1.5 text-xs text-indigo-600 font-semibold">
-								✓ Ready to detect
-							</div>
 						</div>
 
-						<label for="file-upload-defensive" class="block text-sm font-semibold text-gray-700 mb-2">Upload New Model</label>
+						<!-- <label for="file-upload-defensive" class="block text-sm font-semibold text-gray-700 mb-2">Upload New Model</label> -->
 						<div class="relative">
 							<input 
 								id="file-upload-defensive" 
@@ -1039,7 +1046,7 @@
 									<span class="text-sm font-medium text-indigo-700">Uploading...</span>
 								{:else}
 									<span class="text-lg">📦</span>
-									<span class="text-sm font-medium text-indigo-700">Select model file</span>
+									<span class="text-sm font-medium text-indigo-700">Upload New Model</span>
 								{/if}
 							</div>
 							<p class="text-xs text-gray-500 mt-1.5 text-center">Supported: .pt, .onnx, .pb, .tflite</p>

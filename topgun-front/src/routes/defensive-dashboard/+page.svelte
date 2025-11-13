@@ -493,7 +493,6 @@
 </svelte:head>
 
 <div class="w-screen h-screen flex flex-col bg-gray-100 overflow-hidden">
-	<button onclick={() => goto("/")}>Back</button>
 	<!-- Header with Stats -->
 	<StatsHeader
 		selectedCamerasCount={selectedCameraIds.size}
@@ -526,16 +525,13 @@
 			<div class="bg-white w-[30%] flex flex-col justify-start items-center px-4 py-4 gap-4 border-b border-gray-200">
 				<!-- Model Upload Section -->
 				<div class="w-full">
-					<div class="bg-gradient-to-r from-indigo-50 to-blue-50 rounded-lg p-4 mb-3">
-						<div class="flex items-center gap-2 mb-2">
+					<div class="bg-gradient-to-r from-indigo-50 to-blue-50 rounded-lg p-2 mb-3">
+						<div class="flex justify-center items-center gap-2">
 							<span class="text-2xl">🤖</span>
 							<div>
 								<h3 class="font-bold text-gray-800 text-sm">Current Model</h3>
 								<p class="text-xs text-gray-600">YOLO v8 NCNN Model 960</p>
 							</div>
-						</div>
-						<div class="bg-white rounded px-2 py-1.5 text-xs text-indigo-600 font-semibold">
-							✓ Ready to detect
 						</div>
 					</div>
 
@@ -555,7 +551,7 @@
 								<span class="text-lg animate-spin">⌛</span>
 								<span class="text-sm font-medium text-indigo-700">Uploading...</span>
 							{:else}
-								<span class="text-lg">📦</span>
+								<span class="text-lg">⏫</span>
 								<span class="text-sm font-medium text-indigo-700">Select model file</span>
 							{/if}
 						</div>
