@@ -37,8 +37,35 @@
 	type DronePosition = { lngLat: [number, number]; popup?: string; color?: string; icon?: string; kind?: 'start' | 'latest'; timestamp: number };
 	let latestDronePositions = $state<Map<number, DronePosition>>(new Map());
 	
+	// Track full path for each drone
+	type DronePathPoint = { lngLat: [number, number]; timestamp: number; color: string };
+	let dronePaths = $state<Map<number, DronePathPoint[]>>(new Map());
+	
 	// Maximum drones to display on map
 	const MAX_DRONES_ON_MAP = 2;
+
+	// Generate path lines for drones
+	let pathLines = $derived.by(() => {
+		const lines: Array<any> = [];
+
+		for (const [trackId, pathPoints] of dronePaths.entries()) {
+			if (pathPoints.length < 2) continue;
+
+			// Get the color from the most recent point
+			const color = pathPoints[pathPoints.length - 1].color;
+
+			// Build coordinates array
+			const coordinates = pathPoints.map(p => p.lngLat);
+
+			lines.push({
+				id: `drone-${trackId}`,
+				coordinates,
+				color
+			});
+		}
+
+		return lines;
+	});
 
 	// Search history state
 	let startDate = $state<string>('');
@@ -187,17 +214,28 @@
 									${new Date(data.timestamp).toLocaleString()}
 								</div>`;
 
-							const color = (o.objective && String(o.objective).toLowerCase() === 'our') ? '#10b981' : '#ef4444';
+						const color = (o.objective && String(o.objective).toLowerCase() === 'our') ? '#10b981' : '#ef4444';
 
-							// Update latest position for this track_id with timestamp
-							latestDronePositions.set(trackId, {
-								lngLat: [lng, lat] as [number, number], 
-								popup, 
-								color,
-								icon: 'drone',
-								kind: 'latest',
-								timestamp: Date.now()
-							});
+						// Update latest position for this track_id with timestamp
+						latestDronePositions.set(trackId, {
+							lngLat: [lng, lat] as [number, number], 
+							popup, 
+							color,
+							icon: 'drone',
+							kind: 'latest',
+							timestamp: Date.now()
+						});
+
+						// Add to path history
+						if (!dronePaths.has(trackId)) {
+							dronePaths.set(trackId, []);
+						}
+						const path = dronePaths.get(trackId)!;
+						path.push({
+							lngLat: [lng, lat] as [number, number],
+							timestamp: Date.now(),
+							color
+						});
 						}
 					}
 				});
@@ -208,11 +246,21 @@
 					const sortedDrones = Array.from(latestDronePositions.entries())
 						.sort((a, b) => b[1].timestamp - a[1].timestamp);
 					
-					// Keep only the most recent MAX_DRONES_ON_MAP drones
+					// Get IDs to keep
+					const idsToKeep = new Set(sortedDrones.slice(0, MAX_DRONES_ON_MAP).map(([id]) => id));
+					
+					// Remove old drones from positions and paths
 					latestDronePositions.clear();
 					sortedDrones.slice(0, MAX_DRONES_ON_MAP).forEach(([trackId, drone]) => {
 						latestDronePositions.set(trackId, drone);
 					});
+					
+					// Clean up paths for drones no longer tracked
+					for (const trackId of dronePaths.keys()) {
+						if (!idsToKeep.has(trackId)) {
+							dronePaths.delete(trackId);
+						}
+					}
 					
 					console.log(`Limited drones to ${MAX_DRONES_ON_MAP} most recent`);
 				}
@@ -521,7 +569,7 @@
 				/>
 				
 				<div class="h-full bg-gray-300 w-[70%]">
-					<MapboxMap accessToken={mapboxToken} center={mapCenter} zoom={12} {markers} />
+					<MapboxMap accessToken={mapboxToken} center={mapCenter} zoom={12} {markers} {pathLines} />
 				</div>
 			</div>
 

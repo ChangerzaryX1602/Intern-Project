@@ -11,6 +11,7 @@
 	import SearchResultCard from '../defensive-dashboard/SearchResultCard.svelte';
 	import type { Camera, Detection, Pagination } from '../defensive-dashboard/types';
 	import { goto } from '$app/navigation';
+	import { LngLat } from 'mapbox-gl';
 
 	const mapboxToken = env.PUBLIC_MAPBOX_TOKEN || '';
 	const wsUrl = env.PUBLIC_WS_URL || 'ws://localhost:8080/api/v1/detect/ws';
@@ -170,6 +171,33 @@
 	let defensiveMarkers = $state<Array<{ lngLat: [number, number]; popup?: string; color?: string; icon?: string; kind?: 'start' | 'latest' }>>([]);
 	const MAX_DRONES_ON_MAP = 2;
 
+	// Track full path for each defensive drone
+	type DefensiveDronePathPoint = { lngLat: [number, number]; timestamp: number; color: string };
+	let defensiveDronePaths = $state<Map<number, DefensiveDronePathPoint[]>>(new Map());
+
+	// Generate path lines for defensive drones
+	let defensivePathLines = $derived.by(() => {
+		const lines: Array<any> = [];
+
+		for (const [trackId, pathPoints] of defensiveDronePaths.entries()) {
+			if (pathPoints.length < 2) continue;
+
+			// Get the color from the most recent point
+			const color = pathPoints[pathPoints.length - 1].color;
+
+			// Build coordinates array
+			const coordinates = pathPoints.map(p => p.lngLat);
+
+			lines.push({
+				id: `defensive-drone-${trackId}`,
+				coordinates,
+				color
+			});
+		}
+
+		return lines;
+	});
+
 	let droneSearchQuery = $state('');
 	let cameraSearchQuery = $state('');
 	let selectedDrone = $state<Drone | null>(null);
@@ -296,7 +324,7 @@
 						Distance: ${latest.distance.toFixed(2)} m<br/>
 						Time Left: ${latest.timeLeft.toFixed(0)}s<br/>
 						GPS: ${latest.gpsStatus === 'good' ? '✓ Connected' : '✗ Loss'}<br/>
-						${latest.target ? `🎯 ${latest.target.target_destcription}<br/>` : ''}
+						${latest.target ? `🎯 ${latest.target.description}<br/>` : ''}
 						${latest.lastUpdate}
 					</div>`,
 				color,
@@ -309,6 +337,7 @@
 
 	// Generate path lines with ALL coordinates (not just start and latest)
 	// EXACT SAME AS OFFENSIVE DASHBOARD
+	// Split into segments based on GPS status changes
 	let pathLines = $derived.by(() => {
 		const lines: Array<any> = [];
 
@@ -316,18 +345,44 @@
 			if (!group.isExpanded) return;
 			if (!group.paths || group.paths.length < 2) return; // Need at least 2 points for a line
 
-			const color = getDroneColor(group.droneId);
+			const originalColor = getDroneColor(group.droneId);
 			
-			// Build full path coordinates array
-			const coordinates = group.paths.map(drone => 
-				[drone.coordinates.lng, drone.coordinates.lat] as [number, number]
-			);
+			// Split path into segments based on GPS status
+			let currentSegment: [number, number][] = [];
+			let currentStatus = group.paths[0].gpsStatus;
+			let segmentIndex = 0;
 
-			lines.push({
-				id: group.droneId,
-				coordinates,
-				color
+			group.paths.forEach((drone, index) => {
+				const coord: [number, number] = [drone.coordinates.lng, drone.coordinates.lat];
+				
+				// If status changed, save current segment and start new one
+				if (drone.gpsStatus !== currentStatus && currentSegment.length > 0) {
+					// Add current point to close the segment
+					currentSegment.push(coord);
+					
+					// Save segment with appropriate color
+					lines.push({
+						id: `${group.droneId}-segment-${segmentIndex++}`,
+						coordinates: [...currentSegment],
+						color: currentStatus === 'loss' ? '#ef4444' : originalColor
+					});
+					
+					// Start new segment with this point
+					currentSegment = [coord];
+					currentStatus = drone.gpsStatus;
+				} else {
+					currentSegment.push(coord);
+				}
 			});
+
+			// Add final segment
+			if (currentSegment.length > 1) {
+				lines.push({
+					id: `${group.droneId}-segment-${segmentIndex}`,
+					coordinates: currentSegment,
+					color: currentStatus === 'loss' ? '#ef4444' : originalColor
+				});
+			}
 		});
 
 		return lines;
@@ -743,17 +798,26 @@
 						}
 					});
 
-					// Limit drones on map
-					if (latestDronePositions.size > MAX_DRONES_ON_MAP) {
-						const sorted = Array.from(latestDronePositions.entries())
-							.sort((a, b) => b[1].timestamp - a[1].timestamp);
-						latestDronePositions.clear();
-						sorted.slice(0, MAX_DRONES_ON_MAP).forEach(([id, pos]) => {
-							latestDronePositions.set(id, pos);
-						});
+				// Limit drones on map
+				if (latestDronePositions.size > MAX_DRONES_ON_MAP) {
+					const sorted = Array.from(latestDronePositions.entries())
+						.sort((a, b) => b[1].timestamp - a[1].timestamp);
+					
+					// Get IDs to keep
+					const idsToKeep = new Set(sorted.slice(0, MAX_DRONES_ON_MAP).map(([id]) => id));
+					
+					latestDronePositions.clear();
+					sorted.slice(0, MAX_DRONES_ON_MAP).forEach(([id, pos]) => {
+						latestDronePositions.set(id, pos);
+					});
+					
+					// Clean up paths for drones no longer tracked
+					for (const trackId of defensiveDronePaths.keys()) {
+						if (!idsToKeep.has(trackId)) {
+							defensiveDronePaths.delete(trackId);
+						}
 					}
-
-					// Update defensiveMarkers array - SAME AS DEFENSIVE DASHBOARD
+				}					// Update defensiveMarkers array - SAME AS DEFENSIVE DASHBOARD
 					defensiveMarkers = Array.from(latestDronePositions.values()).map(({ timestamp, ...drone }) => drone);
 					console.log('Total unique drones on defensive map:', defensiveMarkers.length);
 				}
@@ -912,6 +976,7 @@
 				
 						</div>
 					{/each}
+					
 				</div>
 			</div>
 
@@ -1026,9 +1091,10 @@
 												<span class="text-gray-500">{drone.lastUpdate}</span>
 											</div>
 											<div class="text-xs text-gray-600 mt-1">
-												📍 {drone.coordinates.lat.toFixed(4)}, {drone.coordinates.lng.toFixed(4)} 
-												| 📏 {drone.height.toFixed(2)}m 
-												| 🚀 {Math.sqrt(drone.velocity.x**2 + drone.velocity.y**2 + drone.velocity.z**2).toFixed(2)}m/s
+												lat. {drone.coordinates.lat.toFixed(4)}, lng. {drone.coordinates.lng.toFixed(4)} 
+												| alt {drone.height.toFixed(2)}m 
+												| velocity {Math.sqrt(drone.velocity.x**2 + drone.velocity.y**2 + drone.velocity.z**2).toFixed(2)}m/s
+												| acceleration {Math.sqrt(drone.acceleration.x**2 + drone.acceleration.y**2 + drone.acceleration.z**2).toFixed(2)}m/s²
 											</div>
 										</div>
 									{/each}
@@ -1097,6 +1163,7 @@
                             center={cameraMapCenter}
                             zoom={12}
                             markers={defensiveMarkers}
+                            pathLines={defensivePathLines}
                         />
                     </div>
                     <!-- Video Stream -->
@@ -1285,7 +1352,7 @@
 						{#each filteredDetections as detection (detection.id)}
 							<SearchResultCard
 								{detection}
-								cameraName={detection.camera?.name || 'GearDinDaeng2025'}
+								cameraName={detection.cameraName || 'GearDinDaeng2025'}
 								onClick={() => {
 									showSearchModal = false;
 								}}

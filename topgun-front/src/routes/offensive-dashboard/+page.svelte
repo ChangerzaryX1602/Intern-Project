@@ -20,7 +20,7 @@
 	interface TargetLocation {
 		lat: number;
 		lng: number;
-		target_destcription: string;
+		description: string;
 	}
 
 	interface AttackData {
@@ -36,7 +36,7 @@
 		status: string;
 		time_left: number;          // New field
 		target?: TargetLocation;    // New field (optional)
-		land?: TargetLocation;      // New field (optional)
+		landing?: TargetLocation;      // New field (optional)
 		created_at: string;
 	}
 
@@ -59,7 +59,7 @@
 		distance: number;
 		timeLeft: number;       // New field
 		target?: TargetLocation;  // New field
-		land?: TargetLocation;    // New field
+		landing?: TargetLocation;    // New field
 	}
 
 	// Grouped drone data
@@ -174,7 +174,7 @@
 			distance: attack.distance,
 			timeLeft: attack.time_left || 0,
 			target: attack.target,
-			land: attack.land
+			landing: attack.landing
 		};
 	}
 
@@ -320,7 +320,7 @@
 			// Start marker (first recorded path)
 			const start = group.paths[0];
 			out.push({
-				id: group.droneId,
+				id: `${group.droneId}-start`,
 				kind: 'start',
 				lngLat: [start.coordinates.lng, start.coordinates.lat] as [number, number],
 				popup: `
@@ -332,12 +332,48 @@
 				color
 			});
 
+			// Target marker (if exists in first path)
+			if (start.target) {
+				out.push({
+					id: `${group.droneId}-target`,
+					kind: 'target',
+					lngLat: [start.target.lng, start.target.lat] as [number, number],
+					popup: `
+						<div style="font-size:13px">
+							<strong>🎯 Target</strong><br/>
+							${start.target.description}<br/>
+							Drone: ${group.name}
+						</div>`,
+					color: '#ef4444',
+					icon: 'target',
+					label: '🎯 ' + start.target.description
+				});
+			}
+
+			// Landing marker (if exists in first path)
+			if (start.landing) {
+				out.push({
+					id: `${group.droneId}-landing`,
+					kind: 'landing',
+					lngLat: [start.landing.lng, start.landing.lat] as [number, number],
+					popup: `
+						<div style="font-size:13px">
+							<strong>🛬 Landing Point</strong><br/>
+							${start.landing.description}<br/>
+							Drone: ${group.name}
+						</div>`,
+					color: '#10b981',
+					icon: 'landing',
+					label: '🛬 ' + start.landing.description
+				});
+			}
+
 			// Latest marker (latest path) - rendered as drone sticker
 			const latest = group.paths[group.paths.length - 1];
 			const velocityMag = Math.sqrt(latest.velocity.x**2 + latest.velocity.y**2 + latest.velocity.z**2);
 			const accelerationMag = Math.sqrt(latest.acceleration.x**2 + latest.acceleration.y**2 + latest.acceleration.z**2);
 			out.push({
-				id: group.droneId,
+				id: `${group.droneId}-latest`,
 				kind: 'latest',
 				lngLat: [latest.coordinates.lng, latest.coordinates.lat] as [number, number],
 				popup: `
@@ -350,7 +386,7 @@
 						Distance: ${latest.distance.toFixed(2)} m<br/>
 						Time Left: ${latest.timeLeft.toFixed(0)}s<br/>
 						GPS: ${latest.gpsStatus === 'good' ? '✓ Connected' : '✗ Loss'}<br/>
-						${latest.target ? `🎯 ${latest.target.target_destcription}<br/>` : ''}
+						${latest.target ? `🎯 ${latest.target.description}<br/>` : ''}
 						${latest.lastUpdate}
 					</div>`,
 				color,
@@ -362,6 +398,7 @@
 	});
 
 	// Generate path lines with ALL coordinates (not just start and latest)
+	// Split into segments based on GPS status changes
 	let pathLines = $derived.by(() => {
 		const lines: Array<any> = [];
 
@@ -369,18 +406,44 @@
 			if (!group.isExpanded) return;
 			if (!group.paths || group.paths.length < 2) return; // Need at least 2 points for a line
 
-			const color = getDroneColor(group.droneId);
+			const originalColor = getDroneColor(group.droneId);
 			
-			// Build full path coordinates array
-			const coordinates = group.paths.map(drone => 
-				[drone.coordinates.lng, drone.coordinates.lat] as [number, number]
-			);
+			// Split path into segments based on GPS status
+			let currentSegment: [number, number][] = [];
+			let currentStatus = group.paths[0].gpsStatus;
+			let segmentIndex = 0;
 
-			lines.push({
-				id: group.droneId,
-				coordinates,
-				color
+			group.paths.forEach((drone, index) => {
+				const coord: [number, number] = [drone.coordinates.lng, drone.coordinates.lat];
+				
+				// If status changed, save current segment and start new one
+				if (drone.gpsStatus !== currentStatus && currentSegment.length > 0) {
+					// Add current point to close the segment
+					currentSegment.push(coord);
+					
+					// Save segment with appropriate color
+					lines.push({
+						id: `${group.droneId}-segment-${segmentIndex++}`,
+						coordinates: [...currentSegment],
+						color: currentStatus === 'loss' ? '#ef4444' : originalColor
+					});
+					
+					// Start new segment with this point
+					currentSegment = [coord];
+					currentStatus = drone.gpsStatus;
+				} else {
+					currentSegment.push(coord);
+				}
 			});
+
+			// Add final segment
+			if (currentSegment.length > 1) {
+				lines.push({
+					id: `${group.droneId}-segment-${segmentIndex}`,
+					coordinates: currentSegment,
+					color: currentStatus === 'loss' ? '#ef4444' : originalColor
+				});
+			}
 		});
 
 		return lines;
@@ -681,15 +744,15 @@
 											{#if drone.target}
 												<div class="col-span-2 mt-1 pt-1 border-t border-gray-200">
 													<span class="text-gray-600">🎯 Target:</span>
-													<span class="font-medium text-gray-800 ml-1">{drone.target.target_destcription}</span>
+													<span class="font-medium text-gray-800 ml-1">{drone.target.description}</span>
 													<span class="text-gray-500 ml-1 text-xs">({drone.target.lat.toFixed(4)}, {drone.target.lng.toFixed(4)})</span>
 												</div>
 											{/if}
-											{#if drone.land}
+											{#if drone.landing}
 												<div class="col-span-2">
 													<span class="text-gray-600">🛬 Landing:</span>
-													<span class="font-medium text-gray-800 ml-1">{drone.land.target_destcription}</span>
-													<span class="text-gray-500 ml-1 text-xs">({drone.land.lat.toFixed(4)}, {drone.land.lng.toFixed(4)})</span>
+													<span class="font-medium text-gray-800 ml-1">{drone.landing.description}</span>
+													<span class="text-gray-500 ml-1 text-xs">({drone.landing.lat.toFixed(4)}, {drone.landing.lng.toFixed(4)})</span>
 												</div>
 											{/if}
 											<div class="col-span-2">
