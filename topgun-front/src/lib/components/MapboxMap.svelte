@@ -42,6 +42,7 @@
 	let map: mapboxgl.Map | null = null;
 	let mapboxMarkers: mapboxgl.Marker[] = [];
 	let mapLoaded = $state(false);
+	let previousMarkerCount = 0; // Track marker count to detect changes
 	const LINE_SOURCE_ID = 'drone-paths';
 	const LINE_LAYER_ID = 'drone-paths-layer';
 
@@ -225,8 +226,11 @@
 		// Draw path lines if enabled
 		drawPathLines();
 
-		// Auto-fit map to show all markers
-		if (markers.length > 0) {
+		// Auto-fit map to show all markers - ONLY when marker count changes
+		const markerCountChanged = markers.length !== previousMarkerCount;
+		previousMarkerCount = markers.length;
+
+		if (markers.length > 0 && markerCountChanged) {
 			if (markers.length === 1) {
 				// Single marker: center on it with fixed zoom
 				map!.flyTo({

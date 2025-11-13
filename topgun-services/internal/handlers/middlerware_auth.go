@@ -14,7 +14,7 @@ import (
 )
 
 var ApiLimiter = limiter.New(limiter.Config{
-	Max:        750,
+	Max:        75000,
 	Expiration: 30 * time.Second,
 	KeyGenerator: func(c *fiber.Ctx) string {
 		return c.Get(fiber.HeaderXForwardedFor)

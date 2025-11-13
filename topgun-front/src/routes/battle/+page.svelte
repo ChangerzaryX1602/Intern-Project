@@ -118,6 +118,8 @@
 		coordinates: { lat: number; lng: number };
 		imageUrl?: string;
 		objectCount?: number;
+		objects?: any[];
+		image_base64?: string;
 	}
 
 	// Color palette for random drone colors (SAME AS OFFENSIVE DASHBOARD)
@@ -165,6 +167,7 @@
 	// Track latest drone positions on defensive map
 	type DronePosition = { lngLat: [number, number]; popup?: string; color?: string; icon?: string; kind?: 'start' | 'latest'; timestamp: number };
 	let latestDronePositions = $state<Map<number, DronePosition>>(new Map());
+	let defensiveMarkers = $state<Array<{ lngLat: [number, number]; popup?: string; color?: string; icon?: string; kind?: 'start' | 'latest' }>>([]);
 	const MAX_DRONES_ON_MAP = 2;
 
 	let droneSearchQuery = $state('');
@@ -304,14 +307,6 @@
 		}))
 	);
 
-	// Generate drone markers for defensive map (from detections)
-	let defensiveDroneMarkers = $derived(
-		Array.from(latestDronePositions.values()).map(({ timestamp, ...drone }) => drone)
-	);
-
-	// Combine camera and drone markers for defensive map - SAME AS DEFENSIVE DASHBOARD
-	let defensiveMarkers = $derived([...defensiveDroneMarkers]);
-
 	// Filter drone groups based on search
 	let filteredGroups = $derived(
 		droneGroups.filter((g) => g.name.toLowerCase().includes(droneSearchQuery.toLowerCase()))
@@ -361,8 +356,10 @@
 
 	// Upload model file via MQTT - SAME AS DEFENSIVE DASHBOARD
 	async function uploadModel(event: Event) {
+		console.log('uploadModel called', event);
 		const input = event.target as HTMLInputElement;
 		const file = input.files?.[0];
+		console.log('Selected file:', file);
 
 		if (!file) return;
 
@@ -412,7 +409,7 @@
 		}
 	}
 
-	// Search detection history
+	// Search detection history - SAME AS DEFENSIVE DASHBOARD
 	async function searchDetectionHistory() {
 		if (!startDate || !endDate) {
 			searchError = 'กรุณาเลือกวันที่เริ่มต้นและสิ้นสุด';
@@ -440,24 +437,18 @@
 			const result = await response.json();
 
 			if (result.success && result.data) {
-				const detects = result.data.detects || [];
-				filteredDetections = detects.map((detect: any) => {
-					const camera = cameras.find(c => c.id === detect.camera_id);
-					const objects = detect.objects || [];
-					return {
-						id: String(detect.id),
-						cameraId: detect.camera_id,
-						cameraName: camera?.name || 'Unknown',
-						droneId: objects[0]?.track_id || 'Unknown',
-						detectedAt: new Date(detect.timestamp).toLocaleString('th-TH'),
-						coordinates: {
-							lat: objects[0]?.lat || 13.7563,
-							lng: objects[0]?.lon || 100.5018
-						},
-						objectCount: objects.length
-					};
-				});
-				showHistory = true;
+				// Handle different response structures
+				let detectionData = [];
+				if (Array.isArray(result.data)) {
+					detectionData = result.data;
+				} else if (result.data.detects && Array.isArray(result.data.detects)) {
+					detectionData = result.data.detects;
+				} else if (result.data.data && Array.isArray(result.data.data)) {
+					detectionData = result.data.data;
+				}
+
+				filteredDetections = detectionData;
+				showSearchModal = true;
 			} else {
 				searchError = 'ไม่พบข้อมูล';
 			}
@@ -467,6 +458,15 @@
 		} finally {
 			isSearching = false;
 		}
+	}
+
+	// Format date for display - SAME AS DEFENSIVE DASHBOARD
+	function formatDateDisplay(dateString: string): string {
+		const date = new Date(dateString);
+		const day = String(date.getDate()).padStart(2, '0');
+		const month = String(date.getMonth() + 1).padStart(2, '0');
+		const year = date.getFullYear();
+		return `${day}/${month}/${year}`;
 	}
 
 	// Transform attack data to drone (SAME AS OFFENSIVE DASHBOARD)
@@ -669,7 +669,9 @@
 							lat: objects[0]?.lat || 13.7563,
 							lng: objects[0]?.lon || 100.5018
 						},
-						objectCount: objects.length
+						objectCount: objects.length,
+						objects: objects, // Add raw objects for display
+						image_base64: data.image_data // Add image data
 					};
 
 					detections = [newDetection, ...detections].slice(0, 10);
@@ -714,6 +716,10 @@
 							latestDronePositions.set(id, pos);
 						});
 					}
+
+					// Update defensiveMarkers array - SAME AS DEFENSIVE DASHBOARD
+					defensiveMarkers = Array.from(latestDronePositions.values()).map(({ timestamp, ...drone }) => drone);
+					console.log('Total unique drones on defensive map:', defensiveMarkers.length);
 				}
 			} catch (error) {
 				console.error('Error parsing detection WebSocket message:', error);
@@ -824,35 +830,40 @@
 					</div>
 				</div>
 
-				<div class="flex-1 flex gap-2 overflow-y-auto p-2 list-scrollbar">
+				<div class="flex-1 flex flex-col gap-2 overflow-y-auto p-2 list-scrollbar">
 					{#each filteredGroups as group (group.droneId)}
-						<div
-							class="flex flex-col text-nowrap justify-between items-center p-2 rounded-lg border-2 bg-white mb-1 cursor-pointer transition-all duration-200 hover:bg-gray-50"
-							style="border-left: 3px solid {getDroneColor(group.droneId)};"
-							role="button"
-							tabindex="0"
-							onclick={() => toggleGroupExpansion(group.droneId)}
-							onkeydown={(e) => e.key === 'Enter' && toggleGroupExpansion(group.droneId)}
-						>
-							<div class="flex items-center mb-1 gap-2">
-								<div 
-									class="w-2 h-2 rounded-full" 
-									style="background-color: {getDroneColor(group.droneId)};"
-								></div>
-								<span class="text-xs">{group.isExpanded ? '🔽' : '▶️'}</span>
-								<span class="text-sm font-bold text-gray-800">{group.name}</span>
-								<span class="text-xs text-gray-500">({group.paths.length})</span>
-							</div>
-							<button
-								class="px-2 py-0.5 rounded-xl text-xs font-semibold"
-								class:bg-green-100={group.lastStatus === 'connected'}
-								class:text-green-800={group.lastStatus === 'connected'}
-								class:bg-red-100={group.lastStatus === 'disconnected'}
-								class:text-red-800={group.lastStatus === 'disconnected'}
-								onclick={(e) => e.stopPropagation()}
+						<div class="mb-1">
+							<!-- Group Header -->
+							<div
+								class="flex flex-col text-nowrap justify-between items-center p-2 rounded-lg border-2 bg-white cursor-pointer transition-all duration-200 hover:bg-gray-50"
+								style="border-left: 3px solid {getDroneColor(group.droneId)};"
+								role="button"
+								tabindex="0"
+								onclick={() => toggleGroupExpansion(group.droneId)}
+								onkeydown={(e) => e.key === 'Enter' && toggleGroupExpansion(group.droneId)}
 							>
-								{group.lastStatus === 'connected' ? '🟢 Connect' : '🔴 Disconnect'}
-							</button>
+								<div class="flex items-center mb-1 gap-2">
+									<div 
+										class="w-2 h-2 rounded-full" 
+										style="background-color: {getDroneColor(group.droneId)};"
+									></div>
+									<span class="text-xs">{group.isExpanded ? '🔽' : '▶️'}</span>
+									<span class="text-sm font-bold text-gray-800">{group.name}</span>
+									<span class="text-xs text-gray-500">({group.paths.length})</span>
+								</div>
+								<button
+									class="px-2 py-0.5 rounded-xl text-xs font-semibold"
+									class:bg-green-100={group.lastStatus === 'connected'}
+									class:text-green-800={group.lastStatus === 'connected'}
+									class:bg-red-100={group.lastStatus === 'disconnected'}
+									class:text-red-800={group.lastStatus === 'disconnected'}
+									onclick={(e) => e.stopPropagation()}
+								>
+									{group.lastStatus === 'connected' ? '🟢 Connect' : '🔴 Disconnect'}
+								</button>
+							</div>
+
+				
 						</div>
 					{/each}
 				</div>
@@ -877,9 +888,10 @@
 			<div class="bg-white rounded-xl shadow-md p-3 overflow-y-auto scrollbar-thin" style="height: 35vh;">
 				<h2 class="m-0 mb-2 text-sm text-gray-800 font-bold flex items-center gap-2">
 					<span>📜</span>
-					{selectedDrone ? `ประวัติการเดินทาง - ${selectedDrone.name}` : 'ประวัติการเดินทาง'}
+					{selectedDrone ? `ประวัติการเดินทาง - ${selectedDrone.name}` : 'ประวัติการเดินทาง - ทั้งหมด'}
 				</h2>
 				{#if selectedDrone}
+					<!-- Single Selected Drone Detail -->
 					<div class="p-2 mb-2 border-2 border-gray-200 rounded-lg">
 						<h3 class="m-0 mb-2 text-xs font-bold text-purple-600">{selectedDrone.name}</h3>
 						<div class="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
@@ -928,8 +940,42 @@
 						</div>
 					</div>
 				{:else}
-					<div class="flex items-center justify-center h-32 text-center text-gray-400">
-						<p class="text-sm">เลือก Drone เพื่อดูประวัติการเดินทาง</p>
+					<!-- All Drones Overview -->
+					<div class="space-y-2">
+						{#each droneGroups as group (group.droneId)}
+							<div class="border-2 border-gray-200 rounded-lg p-2">
+								<div class="flex items-center gap-2 mb-2">
+									<div 
+										class="w-3 h-3 rounded-full" 
+										style="background-color: {getDroneColor(group.droneId)};"
+									></div>
+									<h3 class="text-xs font-bold text-gray-800">{group.name}</h3>
+									<span class="text-xs text-gray-500">({group.paths.length} paths)</span>
+								</div>
+								<div class="space-y-1">
+									{#each group.paths as drone, index (drone.id)}
+										<div 
+											class="p-2 rounded bg-gray-50 border-l-2 hover:bg-gray-100 cursor-pointer transition-all"
+											style="border-left-color: {getDroneColor(group.droneId)};"
+											onclick={() => selectDrone(drone)}
+											onkeydown={(e) => e.key === 'Enter' && selectDrone(drone)}
+											role="button"
+											tabindex="0"
+										>
+											<div class="flex justify-between items-center text-xs">
+												<span class="font-semibold text-gray-700">Path #{index + 1}</span>
+												<span class="text-gray-500">{drone.lastUpdate}</span>
+											</div>
+											<div class="text-xs text-gray-600 mt-1">
+												📍 {drone.coordinates.lat.toFixed(4)}, {drone.coordinates.lng.toFixed(4)} 
+												| 📏 {drone.height}m 
+												| 🚀 {drone.velocity}m/s
+											</div>
+										</div>
+									{/each}
+								</div>
+							</div>
+						{/each}
 					</div>
 				{/if}
 			</div>
@@ -1028,7 +1074,7 @@
 								id="file-upload-defensive" 
 								type="file" 
 								accept=".pt,.onnx,.pb,.tflite,.pth"
-								class="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+								class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
 								onchange={uploadModel}
 								bind:this={fileInputRef}
 								disabled={isUploadingModel}
@@ -1097,18 +1143,38 @@
 									<small class="text-sm">Select cameras to start monitoring...</small>
 								</div>
 							{:else}
-								{#each detections as detection (detection.id)}
-									<div class="flex gap-3 p-3 mb-2 border-2 border-gray-200 rounded-lg hover:border-indigo-300 transition-all cursor-pointer bg-white hover:shadow-md">
-										<div class="w-16 h-16 shrink-0 bg-gradient-to-br from-indigo-100 to-blue-100 rounded-lg flex items-center justify-center">
-											<span class="text-2xl">📷</span>
-										</div>
-										<div class="flex-1">
-											<h3 class="m-0 mb-1 text-sm font-bold text-indigo-600">{detection.cameraName}</h3>
-											<p class="text-xs text-gray-500 mb-1">{detection.detectedAt}</p>
-											<div class="flex items-center gap-2">
-												<span class="px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-xs font-semibold">
-													🚁 {detection.objectCount || 0} drone{detection.objectCount !== 1 ? 's' : ''}
-												</span>
+								{#each detections.slice(0, 10) as detection (detection.id)}
+									<div class="p-2 border-2 border-gray-200 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer">
+										<div class="flex items-start gap-2">
+											<!-- Image Preview -->
+											<div class="w-16 h-16 shrink-0 rounded-lg overflow-hidden bg-gray-100">
+												{#if detection.image_base64}
+													<img
+														src="data:image/jpeg;base64,{detection.image_base64}"
+														alt="Detection {detection.id}"
+														class="w-full h-full object-cover"
+													/>
+												{:else}
+													<img
+														src="{apiUrl}/detect/{detection.id}/file"
+														alt="Detection {detection.id}"
+														class="w-full h-full object-cover"
+														onerror={(e) => { e.currentTarget.src = 'data:image/svg+xml,%3Csvg xmlns=\"http://www.w3.org/2000/svg\" width=\"64\" height=\"64\"%3E%3Ctext x=\"50%\" y=\"50%\" font-size=\"32\" text-anchor=\"middle\" dy=\".3em\"%3E📷%3C/text%3E%3C/svg%3E'; }}
+													/>
+												{/if}
+											</div>
+											<div class="flex-1 min-w-0">
+												<div class="text-xs font-bold text-gray-800 truncate">
+													📹 {getCameraName(detection.cameraId)}
+												</div>
+												<div class="text-xs text-gray-500 mt-1">
+													🕐 {detection.detectedAt}
+												</div>
+												{#if detection.objects && detection.objects[0]}
+													<div class="text-xs text-red-600 font-semibold mt-1">
+														({detection.objects[0].lat !== undefined ? detection.objects[0].lat.toFixed(6) : '-'},{detection.objects[0].lon !== undefined ? detection.objects[0].lon.toFixed(6) : '-'}) Alt: {detection.objects[0].alt !== undefined ? detection.objects[0].alt.toFixed(2) : '-'}m
+													</div>
+												{/if}
 											</div>
 										</div>
 									</div>
@@ -1131,7 +1197,7 @@
 				<div>
 					<h2 class="text-xl font-bold text-gray-800">ผลการค้นหา</h2>
 					<p class="text-sm text-gray-600 mt-1">
-						{startDate} - {endDate}
+						{formatDateDisplay(startDate)} - {formatDateDisplay(endDate)}
 						<span class="ml-2 bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full text-xs font-semibold">
 							พบ {filteredDetections.length} รายการ
 						</span>
@@ -1159,27 +1225,13 @@
 				{:else}
 					<div class="grid grid-cols-3 gap-4">
 						{#each filteredDetections as detection (detection.id)}
-							<div class="flex gap-3 p-4 border-2 border-gray-200 rounded-lg hover:border-indigo-300 transition-all cursor-pointer bg-white hover:shadow-md"
-								onclick={() => {
+							<SearchResultCard
+								{detection}
+								cameraName={detection.camera?.name || 'GearDinDaeng2025'}
+								onClick={() => {
 									showSearchModal = false;
 								}}
-								onkeydown={(e) => e.key === 'Enter' && (showSearchModal = false)}
-								role="button"
-								tabindex="0"
-							>
-								<div class="w-20 h-20 shrink-0 bg-gradient-to-br from-indigo-100 to-blue-100 rounded-lg flex items-center justify-center">
-									<span class="text-3xl">📷</span>
-								</div>
-								<div class="flex-1">
-									<h3 class="m-0 mb-1 text-sm font-bold text-indigo-600">{detection.cameraName}</h3>
-									<p class="text-xs text-gray-500 mb-2">{detection.detectedAt}</p>
-									<div class="flex items-center gap-2">
-										<span class="px-2 py-1 bg-red-100 text-red-700 rounded-full text-xs font-semibold">
-											🚁 {detection.objectCount || 0} drone{detection.objectCount !== 1 ? 's' : ''}
-										</span>
-									</div>
-								</div>
-							</div>
+							/>
 						{/each}
 					</div>
 				{/if}
