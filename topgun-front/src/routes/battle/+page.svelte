@@ -11,7 +11,6 @@
 	import SearchResultCard from '../defensive-dashboard/SearchResultCard.svelte';
 	import type { Camera, Detection, Pagination } from '../defensive-dashboard/types';
 	import { goto } from '$app/navigation';
-	import { LngLat } from 'mapbox-gl';
 
 	const mapboxToken = env.PUBLIC_MAPBOX_TOKEN || '';
 	const wsUrl = env.PUBLIC_WS_URL || 'ws://localhost:8080/api/v1/detect/ws';
@@ -1260,7 +1259,7 @@
 							</h2>
 						</div>
 
-						<div class="flex flex-col gap-4 overflow-y-auto py-2 flex-1 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 hover:scrollbar-thumb-gray-400">
+						<div class="flex flex-col gap-4 overflow-y-auto py-2 flex-1 scroll-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 hover:scrollbar-thumb-gray-400">
 							{#if detections.length === 0}
 								<div class="flex flex-col items-center justify-center w-full p-8 text-center text-gray-400">
 									<div class="text-4xl mb-2 opacity-50">📷</div>
