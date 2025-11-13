@@ -423,6 +423,29 @@
 		// Disconnect WebSocket
 		disconnectWebSocket();
 	});
+
+	// Real-time server time
+	let currentTime = $state(new Date());
+
+	$effect(() => {
+		const interval = setInterval(() => {
+			currentTime = new Date();
+		}, 1000);
+
+		return () => clearInterval(interval);
+	});
+
+	function formatDateTime(date: Date): string {
+		return date.toLocaleString('th-TH', {
+			year: 'numeric',
+			month: '2-digit',
+			day: '2-digit',
+			hour: '2-digit',
+			minute: '2-digit',
+			second: '2-digit',
+			hour12: false
+		});
+	}
 </script>
 
 <svelte:head>
@@ -431,43 +454,42 @@
 
 <div class="w-screen h-screen flex flex-col bg-gray-100 overflow-hidden">
 	<!-- Header -->
-	 	<button onclick={() => goto("/")}>Back</button>
-
-	<header class="bg-gradient-to-br from-red-500 to-red-600 text-white px-8 py-6 shadow-lg z-10">
-		<div class="flex justify-between items-center">
+	<header class="bg-gradient-to-br from-indigo-500 to-purple-600 text-white px-8 py-2 shadow-lg z-10">
+		<div class="flex justify-between items-center gap-8 max-w-full">
 			<div class="flex items-center gap-4">
+				<!-- <div class="text-5xl animate-bounce-slow">🛡️</div> -->
+				<button
+					onclick={() => goto("/")}
+					class="p-2 rounded-lg bg-white/20 hover:bg-white/30 transition-colors cursor-pointer"
+					title="Back to home"
+					aria-label="Back to home"
+				>
+					<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+					</svg>
+				</button>
+
 				<div>
-					<h1 class="m-0 text-3xl font-bold">Offensive Dashboard</h1>
-					<p class="m-0 opacity-90 text-sm">Drone Control & Monitoring</p>
+					<h1 class="m-0 text-xl font-bold">Offensive Dashboard</h1>
+					<p class="m-0 opacity-90 text-xs">Drone Control & Monitoring</p>
+				</div>
+
+				<!-- Server Time - Real-time display -->
+				<div class="flex items-center gap-2 px-4 py-2 text-sm font-medium border-l border-white/50">
+					<span class="text-lg">🕐</span>
+					<div>
+						<div class="text-xs opacity-75">Server Time</div>
+						<div class="font-mono font-bold">{formatDateTime(currentTime)}</div>
+					</div>
 				</div>
 			</div>
 
-			<div class="flex items-center gap-4 px-6 py-2 bg-white/20 rounded-lg">
-				<span class="text-sm opacity-90">Connection:</span>
-				<span class="flex items-center gap-2">
-					<span
-						class="w-2 h-2 rounded-full"
-						class:bg-green-400={isConnected}
-						class:bg-red-400={!isConnected}
-						class:animate-pulse={isConnected}
-					></span>
-					<span class="text-sm font-semibold">
-						{isConnected ? '🟢 Connected' : '🔴 Disconnected'}
-					</span>
-				</span>
-			</div>
-
-			<div class="flex items-center gap-4 px-6 py-2 bg-white/20 rounded-lg">
-				<span class="text-sm opacity-90">Server Time:</span>
-				<span class="text-lg font-bold">{new Date().toLocaleString('th-TH', { 
-					year: 'numeric',
-					month: '2-digit', 
-					day: '2-digit',
-					hour: '2-digit',
-					minute: '2-digit',
-					hour12: false
-				})}</span>
-				<span class="px-3 py-1 bg-white/30 rounded-xl text-xs font-semibold">🔴 LIVE</span>
+			<div class="flex items-center gap-6">
+				<!-- Commander Info -->
+				<div class="flex items-center gap-2 px-4 py-2 bg-white/20 rounded-4xl text-sm font-medium">
+					<span class="text-lg">👨‍💼</span>
+					<span>commander</span>
+				</div>
 			</div>
 		</div>
 	</header>
@@ -479,8 +501,8 @@
 			<!-- Search -->
 			<SearchBox
 				bind:value={searchQuery}
-				placeholder="ค้นหา Drone"
-				label="🔍 ค้นหา Drone"
+				placeholder="🔍 ค้นหา Drone"
+				label=""
 				onSearch={() => {}}
 			/>
 
