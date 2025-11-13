@@ -29,7 +29,7 @@
 	interface TargetLocation {
 		lat: number;
 		lng: number;
-		target_destcription: string;
+		description: string;
 	}
 
 	interface AttackData {
@@ -45,7 +45,7 @@
 		status: string;
 		time_left: number;
 		target?: TargetLocation;
-		land?: TargetLocation;
+		landing?: TargetLocation;
 		created_at: string;
 	}
 
@@ -68,7 +68,7 @@
 		distance: number;
 		timeLeft: number;
 		target?: TargetLocation;
-		land?: TargetLocation;
+		landing?: TargetLocation;
 	}
 
 	// Grouped drone data (SAME AS OFFENSIVE DASHBOARD)
@@ -241,6 +241,42 @@
 					</div>`,
 				color
 			});
+
+			// Target marker (if exists in first path)
+			if (start.target) {
+				out.push({
+					id: `${group.droneId}-target`,
+					kind: 'target',
+					lngLat: [start.target.lng, start.target.lat] as [number, number],
+					popup: `
+						<div style="font-size:13px">
+							<strong>🎯 Target</strong><br/>
+							${start.target.description}<br/>
+							Drone: ${group.name}
+						</div>`,
+					color: '#ef4444',
+					icon: 'target',
+					label: '🎯 ' + start.target.description
+				});
+			}
+
+			// Landing marker (if exists in first path)
+			if (start.landing) {
+				out.push({
+					id: `${group.droneId}-landing`,
+					kind: 'landing',
+					lngLat: [start.landing.lng, start.landing.lat] as [number, number],
+					popup: `
+						<div style="font-size:13px">
+							<strong>🛬 Landing Point</strong><br/>
+							${start.landing.description}<br/>
+							Drone: ${group.name}
+						</div>`,
+					color: '#10b981',
+					icon: 'landing',
+					label: '🛬 ' + start.landing.description
+				});
+			}
 
 			// Latest marker (latest path) - rendered as drone sticker
 			const latest = group.paths[group.paths.length - 1];
@@ -496,7 +532,7 @@
 			distance: attack.distance,
 			timeLeft: attack.time_left || 0,
 			target: attack.target,
-			land: attack.land
+			landing: attack.landing
 		};
 	}
 
@@ -896,10 +932,23 @@
 
 			<!-- Drone History -->
 			<div class="bg-white rounded-xl shadow-md p-3 overflow-y-auto scrollbar-thin" style="height: 35vh;">
-				<h2 class="m-0 mb-2 text-sm text-gray-800 font-bold flex items-center gap-2">
-					<span>📜</span>
-					{selectedDrone ? `ประวัติการเดินทาง - ${selectedDrone.name}` : 'ประวัติการเดินทาง - ทั้งหมด'}
-				</h2>
+				<div class="flex items-center justify-between mb-2">
+					<h2 class="m-0 text-sm text-gray-800 font-bold flex items-center gap-2">
+						<span>📜</span>
+						{selectedDrone ? `ประวัติการเดินทาง - ${selectedDrone.name}` : 'ประวัติการเดินทาง - ทั้งหมด'}
+					</h2>
+					{#if selectedDrone}
+						<button
+							onclick={() => selectedDrone = null}
+							class="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-medium transition-colors flex items-center gap-1"
+						>
+							<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+							</svg>
+							ย้อนกลับ
+						</button>
+					{/if}
+				</div>
 				{#if selectedDrone}
 					<!-- Single Selected Drone Detail -->
 					<div class="p-2 mb-2 border-2 border-gray-200 rounded-lg">
@@ -932,15 +981,15 @@
 							{#if selectedDrone.target}
 								<div class="col-span-2 mt-1 pt-1 border-t border-gray-200">
 									<span class="text-gray-600">🎯 Target:</span>
-									<span class="font-medium text-gray-800 ml-1">{selectedDrone.target.target_destcription}</span>
+									<span class="font-medium text-gray-800 ml-1">{selectedDrone.target.description}</span>
 									<span class="text-gray-500 ml-1 text-xs">({selectedDrone.target.lat.toFixed(4)}, {selectedDrone.target.lng.toFixed(4)})</span>
 								</div>
 							{/if}
-							{#if selectedDrone.land}
+							{#if selectedDrone.landing}
 								<div class="col-span-2">
 									<span class="text-gray-600">🛬 Landing:</span>
-									<span class="font-medium text-gray-800 ml-1">{selectedDrone.land.target_destcription}</span>
-									<span class="text-gray-500 ml-1 text-xs">({selectedDrone.land.lat.toFixed(4)}, {selectedDrone.land.lng.toFixed(4)})</span>
+									<span class="font-medium text-gray-800 ml-1">{selectedDrone.landing.description}</span>
+									<span class="text-gray-500 ml-1 text-xs">({selectedDrone.landing.lat.toFixed(4)}, {selectedDrone.landing.lng.toFixed(4)})</span>
 								</div>
 							{/if}
 							<div class="col-span-2">
@@ -978,8 +1027,8 @@
 											</div>
 											<div class="text-xs text-gray-600 mt-1">
 												📍 {drone.coordinates.lat.toFixed(4)}, {drone.coordinates.lng.toFixed(4)} 
-												| 📏 {drone.height}m 
-												| 🚀 {drone.velocity}m/s
+												| 📏 {drone.height.toFixed(2)}m 
+												| 🚀 {Math.sqrt(drone.velocity.x**2 + drone.velocity.y**2 + drone.velocity.z**2).toFixed(2)}m/s
 											</div>
 										</div>
 									{/each}

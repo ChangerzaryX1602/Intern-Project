@@ -242,44 +242,7 @@
 			</div>
 		{/if}
 
-		{#if showStats && imageSrc}
-			<div class="stats-overlay">
-				<div class="stat">
-					<span class="stat-label">Frame:</span>
-					<span class="stat-value">{frameNumber}</span>
-				</div>
-				<div class="stat">
-					<span class="stat-label">FPS:</span>
-					<span class="stat-value">{fps}</span>
-				</div>
-				<div class="stat">
-					<span class="stat-label">Detections:</span>
-					<span class="stat-value detections">{detections}</span>
-				</div>
-				{#if modelName}
-					<div class="stat">
-						<span class="stat-label">Model:</span>
-						<span class="stat-value model">{modelName}</span>
-					</div>
-				{/if}
-				<div class="stat">
-					<span
-						class="connection-status"
-						class:connected
-						class:disconnected={!connected}
-						class:reconnecting={!connected && reconnectAttempts > 0}
-					>
-						{#if connected}
-							🟢 Live
-						{:else if reconnectAttempts > 0}
-							🟡 Reconnecting... ({reconnectAttempts})
-						{:else}
-							🔴 Disconnected
-						{/if}
-					</span>
-				</div>
-			</div>
-		{/if}
+		
 	</div>
 </div>
 

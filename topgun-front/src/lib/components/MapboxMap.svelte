@@ -8,8 +8,9 @@
 		popup?: string;
 		color?: string;
 		id?: string; // For grouping markers with same ID
-		kind?: 'start' | 'latest'; // start = small colored marker, latest = drone sticker
-		icon?: string; // optional icon hint, e.g. 'drone'
+		kind?: 'start' | 'latest' | 'target' | 'landing'; // start = small colored marker, latest = drone sticker, target/landing = with label
+		icon?: string; // optional icon hint, e.g. 'drone', 'target', 'landing'
+		label?: string; // optional text label to show above marker
 	};
 
 	type PathLine = {
@@ -203,6 +204,44 @@
 				el.appendChild(img);
 
 				mapboxMarker = new mapboxgl.Marker({ element: el, anchor: 'center' })
+					.setLngLat(marker.lngLat);
+
+				if (marker.popup) {
+					mapboxMarker.setPopup(new mapboxgl.Popup({ anchor: 'top' }).setHTML(marker.popup));
+				}
+			} else if (marker.kind === 'target' || marker.kind === 'landing') {
+				// Target/Landing marker with label
+				const el = document.createElement('div');
+				el.className = 'labeled-marker';
+				el.style.display = 'flex';
+				el.style.flexDirection = 'column';
+				el.style.alignItems = 'center';
+				el.style.pointerEvents = 'auto';
+				
+				// Label text
+				if (marker.label) {
+					const label = document.createElement('div');
+					label.textContent = marker.label;
+					label.style.color = marker.color || '#ef4444';
+					label.style.fontSize = '14px';
+					label.style.fontWeight = 'bold';
+					label.style.whiteSpace = 'nowrap';
+					label.style.marginBottom = '4px';
+					label.style.textShadow = '1px 1px 2px white, -1px -1px 2px white, 1px -1px 2px white, -1px 1px 2px white';
+					el.appendChild(label);
+				}
+				
+				// Marker dot
+				const dot = document.createElement('div');
+				dot.style.width = '12px';
+				dot.style.height = '12px';
+				dot.style.backgroundColor = marker.color || '#ef4444';
+				dot.style.borderRadius = '50%';
+				dot.style.border = '2px solid white';
+				dot.style.boxShadow = '0 2px 4px rgba(0,0,0,0.3)';
+				el.appendChild(dot);
+
+				mapboxMarker = new mapboxgl.Marker({ element: el, anchor: 'bottom' })
 					.setLngLat(marker.lngLat);
 
 				if (marker.popup) {
