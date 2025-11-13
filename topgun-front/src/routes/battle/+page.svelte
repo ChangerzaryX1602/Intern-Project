@@ -801,7 +801,7 @@
 
             <div class="flex items-center gap-6">
                 <!-- Commander Info -->
-                <div class="flex items-center gap-2 px-4 py-3 bg-white/20 rounded-lg text-sm font-medium">
+                <div class="flex items-center gap-2 px-4 py-2 bg-white/20 rounded-4xl text-sm font-medium">
                     <span class="text-lg">👨‍💼</span>
                     <span>commander</span>
                 </div>

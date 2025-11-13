@@ -486,7 +486,7 @@
 
 			<div class="flex items-center gap-6">
 				<!-- Commander Info -->
-				<div class="flex items-center gap-2 px-4 py-3 bg-white/20 rounded-lg text-sm font-medium">
+				<div class="flex items-center gap-2 px-4 py-2 bg-white/20 rounded-4xl text-sm font-medium">
 					<span class="text-lg">👨‍💼</span>
 					<span>commander</span>
 				</div>
@@ -501,8 +501,8 @@
 			<!-- Search -->
 			<SearchBox
 				bind:value={searchQuery}
-				placeholder="ค้นหา Drone"
-				label="🔍 ค้นหา Drone"
+				placeholder="🔍 ค้นหา Drone"
+				label=""
 				onSearch={() => {}}
 			/>
 
