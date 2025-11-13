@@ -1,6 +1,7 @@
 package detect
 
 import (
+	"time"
 	"topgun-services/pkg/domain"
 	"topgun-services/pkg/models"
 	"topgun-services/pkg/utils"
@@ -25,12 +26,35 @@ func (r *detectRepository) CreateDetect(detect models.Detect) (*models.Detect, e
 	}
 	return &detect, nil
 }
-func (r *detectRepository) GetDetects(pagination models.Pagination, filter models.Search) ([]models.Detect, *models.Pagination, *models.Search, error) {
+func (r *detectRepository) GetDetects(pagination models.Pagination, filter models.Search, startDate, endDate string) ([]models.Detect, *models.Pagination, *models.Search, error) {
 	if r.DB == nil {
 		return nil, nil, nil, gorm.ErrInvalidDB
 	}
 	var detects []models.Detect
 	dbTx := utils.ApplySearch(r.DB, filter)
+
+	// Apply date range filter if provided
+	if startDate != "" {
+		// Parse start date (format: YYYY-MM-DD)
+		if startTime, err := time.Parse("2006-01-02", startDate); err == nil {
+			// Set to beginning of day
+			startTime = time.Date(startTime.Year(), startTime.Month(), startTime.Day(), 0, 0, 0, 0, startTime.Location())
+			dbTx = dbTx.Where("timestamp >= ?", startTime)
+		}
+	}
+
+	if endDate != "" {
+		// Parse end date (format: YYYY-MM-DD)
+		if endTime, err := time.Parse("2006-01-02", endDate); err == nil {
+			// Set to end of day (23:59:59)
+			endTime = time.Date(endTime.Year(), endTime.Month(), endTime.Day(), 23, 59, 59, 999999999, endTime.Location())
+			dbTx = dbTx.Where("timestamp <= ?", endTime)
+		}
+	}
+
+	// Order by timestamp descending (newest first)
+	dbTx = dbTx.Order("timestamp DESC")
+
 	dbTx = utils.ApplyPagination(dbTx, &pagination, &detects)
 	err := dbTx.Find(&detects).Error
 	if err != nil {

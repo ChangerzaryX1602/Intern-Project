@@ -1,5 +1,7 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import type { Detection } from './types';
+	import { env } from '$env/dynamic/public';
 
 	interface Props {
 		detection: Detection;
@@ -10,9 +12,67 @@
 
 	let { detection, isSelected, cameraName, onClick }: Props = $props();
 	let showModal = $state(false);
+	let imageData = $state<string>('');
+	let isLoadingImage = $state(false);
 
-	function formatDate(dateString: string): string {
+	const apiUrl = env.PUBLIC_API_URL || 'http://localhost:8080/api/v1';
+
+	// Parse objects data
+	function parseObjects() {
+		// Try new format first (objects)
+		const objectsArray = detection.objects || detection.detected_objects;
+		
+		console.log('Detection data:', detection);
+		console.log('Objects array:', objectsArray);
+		
+		if (!objectsArray || objectsArray.length === 0) {
+			console.log('No objects found');
+			return [];
+		}
+		
+		const parsed = objectsArray.map((obj: any) => {
+			// If obj is string, try to parse it
+			if (typeof obj === 'string') {
+				try {
+					return JSON.parse(obj);
+				} catch {
+					return obj;
+				}
+			}
+			return obj;
+		});
+		
+		console.log('Parsed objects:', parsed);
+		return parsed;
+	}
+
+	// Load image lazily
+	async function loadImage() {
+		if (imageData || isLoadingImage || !detection.id) return;
+		
+		isLoadingImage = true;
+		try {
+			const response = await fetch(`${apiUrl}/detect/${detection.id}/file`);
+			if (response.ok) {
+				const blob = await response.blob();
+				imageData = URL.createObjectURL(blob);
+			}
+		} catch (error) {
+			console.error('Failed to load image:', error);
+		} finally {
+			isLoadingImage = false;
+		}
+	}
+
+	// Start loading image when card mounts
+	onMount(() => {
+		loadImage();
+	});
+
+	function formatDate(dateString?: string): string {
+		if (!dateString) return '-';
 		const date = new Date(dateString);
+		if (isNaN(date.getTime())) return '-';
 		const hours = String(date.getHours()).padStart(2, '0');
 		const minutes = String(date.getMinutes()).padStart(2, '0');
 		const seconds = String(date.getSeconds()).padStart(2, '0');
@@ -32,10 +92,32 @@
 	}
 
 	function formatLatLng(value: string | number | undefined): string {
-		if (!value) return '-';
+		if (value === undefined || value === null) return '-';
 		const num = typeof value === 'string' ? parseFloat(value) : value;
-		return Number.isNaN(num) ? '-' : num.toFixed(6);
+		if (Number.isNaN(num) || !Number.isFinite(num)) return '-';
+		return num.toFixed(6);
 	}
+
+	function formatNumber(value: string | number | undefined, decimals: number = 2): string {
+		if (value === undefined || value === null) return '-';
+		const num = typeof value === 'string' ? parseFloat(value) : value;
+		if (Number.isNaN(num) || !Number.isFinite(num)) return '-';
+		return num.toFixed(decimals);
+	}
+
+	function formatTimestamp(timestamp: number | undefined): string {
+		if (!timestamp || timestamp === 0) return '-';
+		try {
+			const date = new Date(timestamp * 1000);
+			if (isNaN(date.getTime())) return '-';
+			return date.toLocaleString('th-TH');
+		} catch {
+			return '-';
+		}
+	}
+
+	const objects = $derived(parseObjects());
+
 </script>
 
 <button 
@@ -44,7 +126,17 @@
 	class:bg-white={!isSelected}
 	onclick={handleCardClick}>
 	<div class="relative w-20 h-20 shrink-0 rounded-lg overflow-hidden bg-gray-100">
-		{#if detection.image_base64}
+		{#if isLoadingImage}
+			<div class="w-full h-full flex items-center justify-center">
+				<div class="animate-spin text-2xl">⏳</div>
+			</div>
+		{:else if imageData}
+			<img
+				src={imageData}
+				alt="Detection {detection.id}"
+				class="w-full h-full object-cover"
+			/>
+		{:else if detection.image_base64}
 			<img
 				src="data:image/jpeg;base64,{detection.image_base64}"
 				alt="Detection {detection.id}"
@@ -67,10 +159,9 @@
 				<span>{formatDate(detection.detected_at)}</span>
 			</div>
 		</div>
-		{#if detection.detected_objects && detection.detected_objects.length > 0}
-			<div class="flex items-center gap-2 pt-1 border-t border-gray-100">
-				<span class="text-base">🚁</span>
-				<span class="text-xs font-semibold text-red-600">ตรวจพบโดรน {detection.detected_objects.length}</span>
+		{#if objects.length > 0}
+			<div class="flex items-center gap-2 pt-1 border-t border-gray-100">				
+<span class="text-xs font-semibold text-red-600">({objects[0].lat !== undefined ? formatLatLng(objects[0].lat) : '-'},{objects[0].lon !== undefined ? formatLatLng(objects[0].lon) : '-'}) Attitude: {objects[0].alt !== undefined ? formatNumber(objects[0].alt) : '-'}</span>
 			</div>
 		{/if}
 	</div>
@@ -111,7 +202,22 @@
 			<!-- Content -->
 			<div class="p-6 space-y-6">
 				<!-- Detection Image -->
-				{#if detection.image_base64}
+				{#if isLoadingImage}
+					<div class="rounded-lg overflow-hidden bg-gray-200 h-96 flex items-center justify-center">
+						<div class="text-center">
+							<div class="text-6xl animate-spin mb-4">⏳</div>
+							<p class="text-gray-600">กำลังโหลดรูปภาพ...</p>
+						</div>
+					</div>
+				{:else if imageData}
+					<div class="rounded-lg overflow-hidden bg-gray-200">
+						<img
+							src={imageData}
+							alt="Detection"
+							class="w-full h-auto max-h-96 object-cover"
+						/>
+					</div>
+				{:else if detection.image_base64}
 					<div class="rounded-lg overflow-hidden bg-gray-200">
 						<img
 							src="data:image/jpeg;base64,{detection.image_base64}"
@@ -122,46 +228,46 @@
 				{/if}
 
 				<!-- Drone Details -->
-				{#if detection.detected_objects && detection.detected_objects.length > 0}
+				{#if objects.length > 0}
 					<div>
 						<h3 class="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
 							<span class="text-xl">🚁</span>
-							ข้อมูลโดรนที่ตรวจพบ ({detection.detected_objects.length} ลำ)
+							ข้อมูลโดรนที่ตรวจพบ ({objects.length} ตำแหน่ง)
 						</h3>
 						
 						<div class="space-y-4">
-							{#each detection.detected_objects as drone, index}
+							{#each objects as obj, index}
 								<div class="border-l-4 border-indigo-500 bg-indigo-50 p-4 rounded-lg">
 									<div class="font-bold text-gray-900 mb-3 text-base">
-										🆔 Drone ID: {drone.obj_id || `Drone_${index + 1}`}
+										🆔 Track ID: {obj.track_id !== undefined ? obj.track_id : `Object_${index + 1}`}
 									</div>
 									
-									<div class="grid grid-cols-1 gap-3 text-sm">
-										{#if drone.lat}
-											<div class="flex items-start gap-2">
-												<span class="text-gray-600 font-medium min-w-fit">📍 ละติจูด:</span>
-												<span class="text-gray-900 font-mono">{formatLatLng(drone.lat)}</span>
+									<div class="grid grid-cols-2 gap-3 text-sm">
+										{#if obj.lat !== undefined}
+											<div class="flex flex-col gap-1">
+												<span class="text-gray-600 font-medium">📍 Latitude</span>
+												<span class="text-gray-900 font-mono text-xs">{formatLatLng(obj.lat)}</span>
 											</div>
 										{/if}
 
-										{#if drone.lng}
-											<div class="flex items-start gap-2">
-												<span class="text-gray-600 font-medium min-w-fit">📍 ลองจิจูด:</span>
-												<span class="text-gray-900 font-mono">{formatLatLng(drone.lng)}</span>
+										{#if obj.lon !== undefined}
+											<div class="flex flex-col gap-1">
+												<span class="text-gray-600 font-medium">📍 Longitude</span>
+												<span class="text-gray-900 font-mono text-xs">{formatLatLng(obj.lon)}</span>
 											</div>
 										{/if}
 
-										{#if drone.size}
-											<div class="flex items-start gap-2">
-												<span class="text-gray-600 font-medium min-w-fit">⚡ ความเร็ว:</span>
-												<span class="text-gray-900">{drone.size}</span>
+										{#if obj.alt !== undefined}
+											<div class="flex flex-col gap-1">
+												<span class="text-gray-600 font-medium">✈️ ความสูง</span>
+												<span class="text-gray-900">{formatNumber(obj.alt, 2)} m</span>
 											</div>
 										{/if}
 
-										{#if drone.objective}
-											<div class="flex items-start gap-2">
-												<span class="text-gray-600 font-medium min-w-fit">🧭 ทิศทาง:</span>
-												<span class="text-gray-900">{drone.objective}</span>
+										{#if obj.timestamp !== undefined}
+											<div class="flex flex-col gap-1">
+												<span class="text-gray-600 font-medium">🕐 เวลาตรวจจับ</span>
+												<span class="text-gray-900 text-xs">{formatTimestamp(obj.timestamp)}</span>
 											</div>
 										{/if}
 									</div>

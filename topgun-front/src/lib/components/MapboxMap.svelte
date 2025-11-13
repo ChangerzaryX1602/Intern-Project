@@ -179,25 +179,27 @@
 			console.log(`Adding marker ${index}:`, marker);
 			let mapboxMarker: mapboxgl.Marker;
 
-			// Latest marker -> render as drone sticker (SVG) using DOM element
+			// Latest marker -> render as drone sticker (GIF/SVG) using DOM element
 			if (marker.kind === 'latest' || marker.icon === 'drone') {
 				const color = marker.color || '#3b82f6';
 				const el = document.createElement('div');
 				el.className = 'drone-sticker';
-				el.style.width = '36px';
-				el.style.height = '36px';
+				el.style.width = '48px';
+				el.style.height = '48px';
 				el.style.display = 'flex';
 				el.style.alignItems = 'center';
 				el.style.justifyContent = 'center';
 				el.style.pointerEvents = 'auto';
-				// Inline SVG airplane icon, colorized
-				const svg = `
-				<svg viewBox="0 0 24 24" width="28" height="28" xmlns="http://www.w3.org/2000/svg">
-				  <g fill="${color}">
-				    <path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9L2 14v2l8-1v3l-2 1v1l3-0.5L14 20v-1l-2-1v-3l9 1z" />
-				  </g>
-				</svg>`;
-				el.innerHTML = svg;
+				
+				// Use drone.gif image
+				const img = document.createElement('img');
+				img.src = '/drone.gif';
+				img.alt = 'Drone';
+				img.style.width = '100%';
+				img.style.height = '100%';
+				img.style.objectFit = 'contain';
+				
+				el.appendChild(img);
 
 				mapboxMarker = new mapboxgl.Marker({ element: el, anchor: 'center' })
 					.setLngLat(marker.lngLat);
@@ -345,15 +347,11 @@
 		height: 100%;
 	}
 
-/* Drone sticker marker styling */
-.drone-sticker svg {
-	filter: drop-shadow(0 2px 4px rgba(0,0,0,0.25));
-	border-radius: 6px;
-}
-
-.drone-sticker {
-	background: rgba(255,255,255,0.9);
-	border-radius: 8px;
-	padding: 2px;
-}
+	/* Drone sticker marker styling */
+	.drone-sticker {
+		background: rgba(255,255,255,0.9);
+		border-radius: 50%;
+		padding: 4px;
+		box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+	}
 </style>

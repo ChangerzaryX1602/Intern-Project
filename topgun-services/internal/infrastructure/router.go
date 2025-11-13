@@ -2,6 +2,7 @@ package infrastructure
 
 import (
 	"fmt"
+	"log"
 	"time"
 
 	"topgun-services/internal/handlers"
@@ -17,6 +18,7 @@ import (
 	swagger "github.com/arsmn/fiber-swagger/v2"
 	"github.com/gofiber/contrib/websocket"
 	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
 	"github.com/spf13/viper"
 )
 
@@ -59,18 +61,49 @@ func (s *Server) SetupRoutes(app *fiber.App) {
 	detectService := detect.NewDetectService(detectRepository)
 	attackService := attack.NewAttackService(attackRepository)
 
-	// MQTT Service
+	// MQTT Service for sending commands to Raspberry PI
 	var mqttService *mqtt.Service
 	if s.MQTTClient != nil && s.MQTTClient.IsConnected() {
-		mqttTopic := viper.GetString("mqtt.topic")
-		if mqttTopic == "" {
-			mqttTopic = "topgun/ai"
+		// Use separate topic for commands (topgun/command)
+		mqttCommandTopic := viper.GetString("mqtt.command_topic")
+		if mqttCommandTopic == "" {
+			mqttCommandTopic = "topgun/command"
 		}
-		mqttService = mqtt.NewService(s.MQTTClient, mqttTopic)
-		// Subscribe to the topic with default handler
-		if err := mqttService.Subscribe(nil); err != nil {
-			fmt.Printf("Warning: failed to subscribe to MQTT topic: %v\n", err)
+		mqttService = mqtt.NewService(s.MQTTClient, mqttCommandTopic)
+		// No need to subscribe to command topic (we only publish)
+		log.Printf("MQTT command service initialized on topic: %s", mqttCommandTopic)
+
+		// Start MQTT detection subscription for RaspberryPI data
+		// Get default camera ID from config or create one
+		detectMQTTTopic := viper.GetString("mqtt.detect_topic")
+		if detectMQTTTopic == "" {
+			detectMQTTTopic = "topgun/ai"
 		}
+		mqttBroker := viper.GetString("mqtt.broker")
+		if mqttBroker == "" {
+			mqttBroker = "tcp://localhost:1883"
+		}
+
+		// Get or create default camera for MQTT detections
+		defaultCameraID := viper.GetString("mqtt.camera_id")
+		var cameraUUID uuid.UUID
+		if defaultCameraID != "" {
+			if parsed, err := uuid.Parse(defaultCameraID); err == nil {
+				cameraUUID = parsed
+			}
+		}
+		// If no camera ID in config, use a fixed UUID for RaspberryPI camera
+		if cameraUUID == uuid.Nil {
+			// Fixed UUID for RaspberryPI MQTT camera
+			cameraUUID = uuid.MustParse("3a939700-7724-4dc8-a5d8-47130aa68213")
+		}
+
+		// Start MQTT subscription in background
+		go func() {
+			if err := detect.StartMQTTSubscription(mqttBroker, detectMQTTTopic, cameraUUID, detectService); err != nil {
+				fmt.Printf("Warning: failed to start MQTT detection subscription: %v\n", err)
+			}
+		}()
 	}
 
 	// App Routes

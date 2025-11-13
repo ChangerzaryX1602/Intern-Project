@@ -55,4 +55,6 @@ jwt:
 mqtt:
   broker: "tcp://localhost:1883"
   client_id: "topgun-services"
-  topic: "topgun/ai"
+  topic: "topgun/ai"           # For receiving detection data from Raspberry PI
+  command_topic: "topgun/command"  # For sending commands to Raspberry PI
+  camera_id: "3a939700-7724-4dc8-a5d8-47130aa68213"

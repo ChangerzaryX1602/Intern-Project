@@ -4,7 +4,7 @@ import "topgun-services/pkg/models"
 
 type DetectRepository interface {
 	CreateDetect(detect models.Detect) (*models.Detect, error)
-	GetDetects(pagination models.Pagination, filter models.Search) ([]models.Detect, *models.Pagination, *models.Search, error)
+	GetDetects(pagination models.Pagination, filter models.Search, startDate, endDate string) ([]models.Detect, *models.Pagination, *models.Search, error)
 	GetDetectsByCameras(cameraIDs []string, pagination models.Pagination) ([]models.Detect, *models.Pagination, error)
 	GetDetect(id uint) (*models.Detect, error)
 	GetDetectFile(id uint) (*models.Detect, error)
@@ -13,7 +13,7 @@ type DetectRepository interface {
 }
 type DetectService interface {
 	CreateDetect(detect models.Detect) (*models.Detect, error)
-	GetDetects(pagination models.Pagination, filter models.Search) ([]models.Detect, *models.Pagination, *models.Search, error)
+	GetDetects(pagination models.Pagination, filter models.Search, startDate, endDate string) ([]models.Detect, *models.Pagination, *models.Search, error)
 	GetDetectsByCameras(cameraIDs []string, pagination models.Pagination) ([]models.Detect, *models.Pagination, error)
 	GetDetect(id uint) (*models.Detect, error)
 	GetDetectFile(id uint) (*models.Detect, error)

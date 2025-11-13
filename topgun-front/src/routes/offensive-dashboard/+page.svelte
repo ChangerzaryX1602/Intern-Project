@@ -3,6 +3,7 @@
 	import MapboxMap from '$lib/components/MapboxMap.svelte';
 	import SearchBox from '$lib/components/SearchBox.svelte';
 	import { env } from '$env/dynamic/public';
+	import { goto } from '$app/navigation';
 
 	const mapboxToken = env.PUBLIC_MAPBOX_TOKEN || '';
 	const WS_URL = 'ws://localhost:8080/api/v1/detect/attack-ws';
@@ -430,6 +431,8 @@
 
 <div class="w-screen h-screen flex flex-col bg-gray-100 overflow-hidden">
 	<!-- Header -->
+	 	<button onclick={() => goto("/")}>Back</button>
+
 	<header class="bg-gradient-to-br from-red-500 to-red-600 text-white px-8 py-6 shadow-lg z-10">
 		<div class="flex justify-between items-center">
 			<div class="flex items-center gap-4">

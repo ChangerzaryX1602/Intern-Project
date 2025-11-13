@@ -3,6 +3,7 @@ package detect
 import (
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"log"
 	"os"
 	"sync"
@@ -56,6 +57,27 @@ type VideoFrameMessage struct {
 	Model       string  `json:"model"`        // Model name used
 }
 
+// RaspberryPI MQTT Detection Data
+type RaspberryPIDetection struct {
+	X          float64 `json:"x"`
+	Y          float64 `json:"y"`
+	W          float64 `json:"w"`
+	H          float64 `json:"h"`
+	Lat        float64 `json:"lat"`
+	Lon        float64 `json:"lon"`
+	Alt        float64 `json:"alt"`
+	Confidence float64 `json:"confidence"`
+	TrackID    int     `json:"track_id"`
+	Timestamp  float64 `json:"timestamp"`
+}
+
+// Video frame cache for capturing
+type VideoFrameCache struct {
+	frame     []byte
+	timestamp float64
+	mutex     sync.RWMutex
+}
+
 // Video stream hub for broadcasting frames to all clients
 type VideoHub struct {
 	clients    map[*VideoClient]bool
@@ -95,6 +117,9 @@ var attackHub *AttackHub
 // Global hub instance
 var hub *Hub
 
+// Global video frame cache for MQTT detection captures
+var videoFrameCache *VideoFrameCache
+
 func init() {
 	hub = &Hub{
 		clients:    make(map[*Client]bool),
@@ -121,6 +146,9 @@ func init() {
 		unregister: make(chan *AttackClient),
 	}
 	go attackHub.run()
+
+	// Initialize video frame cache
+	videoFrameCache = &VideoFrameCache{}
 }
 
 // Run video hub to handle video client connections and broadcasts
@@ -213,10 +241,52 @@ func BroadcastVideoFrame(frame *VideoFrameMessage) {
 	if videoHub != nil {
 		select {
 		case videoHub.broadcast <- frame:
+			// Update frame cache for MQTT captures
+			UpdateVideoFrameCache(frame)
 		default:
 			log.Println("Video broadcast channel full, dropping frame")
 		}
 	}
+}
+
+// UpdateVideoFrameCache updates the cached video frame
+func UpdateVideoFrameCache(frame *VideoFrameMessage) {
+	if videoFrameCache == nil {
+		return
+	}
+
+	videoFrameCache.mutex.Lock()
+	defer videoFrameCache.mutex.Unlock()
+
+	// Decode base64 frame
+	frameData, err := base64.StdEncoding.DecodeString(frame.Frame)
+	if err != nil {
+		log.Printf("Failed to decode video frame: %v", err)
+		return
+	}
+
+	videoFrameCache.frame = frameData
+	videoFrameCache.timestamp = frame.Timestamp
+}
+
+// GetLatestVideoFrame returns the latest cached video frame
+func GetLatestVideoFrame() ([]byte, float64, error) {
+	if videoFrameCache == nil {
+		return nil, 0, fmt.Errorf("video frame cache not initialized")
+	}
+
+	videoFrameCache.mutex.RLock()
+	defer videoFrameCache.mutex.RUnlock()
+
+	if videoFrameCache.frame == nil {
+		return nil, 0, fmt.Errorf("no video frame available")
+	}
+
+	// Return a copy of the frame
+	frameCopy := make([]byte, len(videoFrameCache.frame))
+	copy(frameCopy, videoFrameCache.frame)
+
+	return frameCopy, videoFrameCache.timestamp, nil
 }
 
 // BroadcastAttack broadcasts attack data to all connected WebSocket clients
@@ -422,7 +492,7 @@ func (h *detectHandler) HandleAttackWebSocket() fiber.Handler {
 			conn: c,
 			send: make(chan []byte, 256),
 		}
-		
+
 		// Register client
 		attackHub.register <- client
 

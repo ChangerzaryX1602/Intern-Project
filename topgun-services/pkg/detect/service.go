@@ -15,8 +15,8 @@ func NewDetectService(repo domain.DetectRepository) domain.DetectService {
 func (s *detectService) CreateDetect(detect models.Detect) (*models.Detect, error) {
 	return s.repository.CreateDetect(detect)
 }
-func (s *detectService) GetDetects(pagination models.Pagination, filter models.Search) ([]models.Detect, *models.Pagination, *models.Search, error) {
-	return s.repository.GetDetects(pagination, filter)
+func (s *detectService) GetDetects(pagination models.Pagination, filter models.Search, startDate, endDate string) ([]models.Detect, *models.Pagination, *models.Search, error) {
+	return s.repository.GetDetects(pagination, filter, startDate, endDate)
 }
 func (s *detectService) GetDetectsByCameras(cameraIDs []string, pagination models.Pagination) ([]models.Detect, *models.Pagination, error) {
 	return s.repository.GetDetectsByCameras(cameraIDs, pagination)

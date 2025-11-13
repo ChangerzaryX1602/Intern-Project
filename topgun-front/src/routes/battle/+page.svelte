@@ -1,28 +1,97 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import MapboxMap from '$lib/components/MapboxMap.svelte';
+	import VideoStream from '$lib/components/VideoStream.svelte';
 	import SearchBox from '$lib/components/SearchBox.svelte';
 	import { env } from '$env/dynamic/public';
+	
+	// Import defensive dashboard components
+	import CameraSelector from '../defensive-dashboard/CameraSelector.svelte';
+	import DetectionCard from '../defensive-dashboard/DetectionCard.svelte';
+	import SearchResultCard from '../defensive-dashboard/SearchResultCard.svelte';
+	import type { Camera, Detection, Pagination } from '../defensive-dashboard/types';
+	import { goto } from '$app/navigation';
 
 	const mapboxToken = env.PUBLIC_MAPBOX_TOKEN || '';
+	const wsUrl = env.PUBLIC_WS_URL || 'ws://localhost:8080/api/v1/detect/ws';
+	const apiUrl = env.PUBLIC_API_URL || 'http://localhost:8080/api/v1';
+	const videoServerUrl = env.PUBLIC_VIDEO_SERVER_URL || 'ws://localhost:8080';
+	const ATTACK_WS_URL = 'ws://localhost:8080/api/v1/detect/attack-ws';
+	const ATTACK_API_URL = 'http://localhost:8080/api/v1/attack';
 
-	// Mock data for drones
-	interface Drone {
-		id: string;
-		name: string;
-		status: 'connected' | 'disconnected';
-		startDate: string;
-		startLocation: string;
-		startCoordinates: { lat: number; lng: number };
-		endDate: string;
-		endLocation: string;
-		endCoordinates: { lat: number; lng: number };
-		distance?: number; // in km
-		avgSpeed?: number; // in km/h
-		avgAcceleration?: number; // in m/s²
+	// Offensive drone data (from Attack API) - EXACT SAME AS OFFENSIVE DASHBOARD
+	interface Vector3 {
+		x: number;
+		y: number;
+		z: number;
 	}
 
-	// Mock data for cameras
+	interface TargetLocation {
+		lat: number;
+		lng: number;
+		target_destcription: string;
+	}
+
+	interface AttackData {
+		id: number;
+		drone_id: string;
+		lat: number;
+		lng: number;
+		height: number;
+		function: string;
+		acceleration: Vector3;
+		velocity: Vector3;
+		distance: number;
+		status: string;
+		time_left: number;
+		target?: TargetLocation;
+		land?: TargetLocation;
+		created_at: string;
+	}
+
+	// Transformed drone data for UI (EACH PATH POINT)
+	interface Drone {
+		id: string; // Unique ID (from attack.id)
+		trackingId: string; // Tracking ID for grouping (drone_id)
+		name: string;
+		status: 'connected' | 'disconnected';
+		location: string;
+		coordinates: {
+			lat: number;
+			lng: number;
+		};
+		gpsStatus: 'good' | 'loss';
+		lastUpdate: string;
+		height: number;
+		velocity: Vector3;
+		acceleration: Vector3;
+		distance: number;
+		timeLeft: number;
+		target?: TargetLocation;
+		land?: TargetLocation;
+	}
+
+	// Grouped drone data (SAME AS OFFENSIVE DASHBOARD)
+	interface DroneGroup {
+		droneId: string;
+		name: string;
+		paths: Drone[];
+		isExpanded: boolean;
+		lastStatus: 'connected' | 'disconnected';
+		lastGpsStatus: 'good' | 'loss';
+		latestUpdate: string;
+	}
+
+	// Defensive camera data (from Camera API)
+	interface CameraData {
+		id: string;
+		name: string;
+		location?: string;
+		institute?: string;
+		latitude?: number;
+		longitude?: number;
+	}
+
 	interface Camera {
 		id: string;
 		name: string;
@@ -31,7 +100,15 @@
 		coordinates: { lat: number; lng: number };
 	}
 
-	// Mock data for detections
+	// Detection data (from Detection WebSocket)
+	interface DetectionData {
+		id: number;
+		camera_id: string;
+		timestamp: string;
+		path: string;
+		objects?: any[];
+	}
+
 	interface Detection {
 		id: string;
 		cameraId: string;
@@ -40,87 +117,74 @@
 		detectedAt: string;
 		coordinates: { lat: number; lng: number };
 		imageUrl?: string;
+		objectCount?: number;
 	}
 
-	let drones = $state<Drone[]>([
-		{
-			id: 'A01',
-			name: 'Drone ID: A01',
-			status: 'connected',
-			startDate: '11/11/2025 18:00 น.',
-			startLocation: 'ภาคกลาง, กรุงเทพ',
-			startCoordinates: { lat: 13.7563, lng: 100.5018 },
-			endDate: '11/11/2025 19:30 น.',
-			endLocation: 'ภาคกลาง, นนทบุรี',
-			endCoordinates: { lat: 13.8621, lng: 100.5144 },
-			distance: 12.5,
-			avgSpeed: 25.0,
-			avgAcceleration: 1.5
-		},
-		{
-			id: 'A02',
-			name: 'Drone ID: A02',
-			status: 'disconnected',
-			startDate: '11/11/2025 17:00 น.',
-			startLocation: 'ภาคกลาง, ปทุมธานี',
-			startCoordinates: { lat: 13.9564, lng: 100.5265 },
-			endDate: '11/11/2025 18:45 น.',
-			endLocation: 'ภาคกลาง, สมุทรปราการ',
-			endCoordinates: { lat: 13.5990, lng: 100.5998 },
-			distance: 18.3,
-			avgSpeed: 21.5,
-			avgAcceleration: 1.2
-		}
-	]);
+	// Color palette for random drone colors (SAME AS OFFENSIVE DASHBOARD)
+	const DRONE_COLORS = [
+		'#ef4444', // red
+		'#f59e0b', // orange
+		'#eab308', // yellow
+		'#84cc16', // lime
+		'#10b981', // green
+		'#14b8a6', // teal
+		'#06b6d4', // cyan
+		'#3b82f6', // blue
+		'#6366f1', // indigo
+		'#8b5cf6', // violet
+		'#a855f7', // purple
+		'#ec4899', // pink
+		'#f43f5e'  // rose
+	];
 
-	let cameras = $state<Camera[]>([
-		{
-			id: 'CAM-001',
-			name: 'Camera #001',
-			status: 'online',
-			location: 'ภาคกลาง, กรุงเทพ - ถนนสุขุมวิท',
-			coordinates: { lat: 13.7563, lng: 100.5018 }
-		},
-		{
-			id: 'CAM-002',
-			name: 'Camera #002',
-			status: 'online',
-			location: 'ภาคกลาง, กรุงเทพ - สยามสแควร์',
-			coordinates: { lat: 13.7465, lng: 100.5348 }
-		},
-		{
-			id: 'CAM-003',
-			name: 'Camera #003',
-			status: 'offline',
-			location: 'ภาคกลาง, นนทบุรี',
-			coordinates: { lat: 13.8621, lng: 100.5144 }
-		}
-	]);
+	// Store assigned colors for each drone_id
+	const droneColors = new Map<string, string>();
 
-	let detections = $state<Detection[]>([
-		{
-			id: 'DET-001',
-			cameraId: 'CAM-001',
-			cameraName: 'Camera #001',
-			droneId: 'A01',
-			detectedAt: '11/11/2025 18:30 น.',
-			coordinates: { lat: 13.7563, lng: 100.5018 }
-		},
-		{
-			id: 'DET-002',
-			cameraId: 'CAM-002',
-			cameraName: 'Camera #002',
-			droneId: 'A01',
-			detectedAt: '11/11/2025 19:00 น.',
-			coordinates: { lat: 13.7465, lng: 100.5348 }
+	// Get or assign color for drone
+	function getDroneColor(droneId: string): string {
+		if (!droneColors.has(droneId)) {
+			// Assign random color
+			const color = DRONE_COLORS[Math.floor(Math.random() * DRONE_COLORS.length)];
+			droneColors.set(droneId, color);
 		}
-	]);
+		return droneColors.get(droneId)!;
+	}
+
+	let droneGroups = $state<DroneGroup[]>([]);
+	let allDrones = $state<Drone[]>([]); // Keep all drones for map
+	let cameras = $state<Camera[]>([]);
+	let detections = $state<Detection[]>([]);
+
+	// WebSocket connections
+	let attackWs: WebSocket | null = null;
+	let detectionWsConnections = new Map<string, WebSocket>();
+	let selectedCameraIds = $state<Set<string>>(new Set());
+	let isLoadingCameras = $state(false);
+	let selectedCameraId = $state<string | null>(null);
+
+	// Track latest drone positions on defensive map
+	type DronePosition = { lngLat: [number, number]; popup?: string; color?: string; icon?: string; kind?: 'start' | 'latest'; timestamp: number };
+	let latestDronePositions = $state<Map<number, DronePosition>>(new Map());
+	const MAX_DRONES_ON_MAP = 2;
 
 	let droneSearchQuery = $state('');
 	let cameraSearchQuery = $state('');
 	let selectedDrone = $state<Drone | null>(null);
 	let selectedCamera = $state<Camera | null>(null);
 	let showHistory = $state(false);
+
+	// Search history state
+	let startDate = $state<string>('');
+	let endDate = $state<string>('');
+	let filteredDetections = $state<Detection[]>([]);
+	let isSearching = $state(false);
+	let searchError = $state('');
+	let showSearchModal = $state(false);
+	
+	// Model upload state
+	let isUploadingModel = $state(false);
+	let uploadProgress = $state('');
+	let fileInputRef: HTMLInputElement;
 
 	let droneMapCenter: [number, number] = $state([100.5018, 13.7563]);
 	let cameraMapCenter: [number, number] = $state([100.5018, 13.7563]);
@@ -148,19 +212,89 @@
 		});
 	}
 
-	// Generate markers for drones
-	let droneMarkers = $derived(
-		drones
-			.filter((d) => d.status === 'connected')
-			.map((d) => ({
-				id: d.id,
-				lngLat: [d.startCoordinates.lng, d.startCoordinates.lat] as [number, number],
-				popup: `<div style="font-size:13px"><strong>${d.name}</strong><br/>${d.startLocation}</div>`,
-				color: '#10b981'
-			}))
-	);
+	// Generate markers for map: only start point (small colored marker) + latest point (drone sticker)
+	// EXACT SAME AS OFFENSIVE DASHBOARD
+	let markers = $derived.by(() => {
+		const out: Array<any> = [];
 
-	// Generate markers for cameras
+		// For each group, if expanded, create two markers: start and latest
+		droneGroups.forEach((group) => {
+			if (!group.isExpanded) return;
+			if (!group.paths || group.paths.length === 0) return;
+
+			const color = getDroneColor(group.droneId);
+
+			// Start marker (first recorded path)
+			const start = group.paths[0];
+			out.push({
+				id: `${group.droneId}-start`,
+				kind: 'start',
+				lngLat: [start.coordinates.lng, start.coordinates.lat] as [number, number],
+				popup: `
+					<div style="font-size:13px">
+						<strong>${group.name} (start)</strong><br/>
+						${start.location}<br/>
+						${start.lastUpdate}
+					</div>`,
+				color
+			});
+
+			// Latest marker (latest path) - rendered as drone sticker
+			const latest = group.paths[group.paths.length - 1];
+			const velocityMag = Math.sqrt(latest.velocity.x**2 + latest.velocity.y**2 + latest.velocity.z**2);
+			const accelerationMag = Math.sqrt(latest.acceleration.x**2 + latest.acceleration.y**2 + latest.acceleration.z**2);
+			out.push({
+				id: `${group.droneId}-latest`,
+				kind: 'latest',
+				lngLat: [latest.coordinates.lng, latest.coordinates.lat] as [number, number],
+				popup: `
+					<div style="font-size:13px">
+						<strong>${group.name} (latest)</strong><br/>
+						${latest.location}<br/>
+						Height: ${latest.height.toFixed(2)}m<br/>
+						Velocity: ${velocityMag.toFixed(2)} m/s<br/>
+						Acceleration: ${accelerationMag.toFixed(2)} m/s²<br/>
+						Distance: ${latest.distance.toFixed(2)} m<br/>
+						Time Left: ${latest.timeLeft.toFixed(0)}s<br/>
+						GPS: ${latest.gpsStatus === 'good' ? '✓ Connected' : '✗ Loss'}<br/>
+						${latest.target ? `🎯 ${latest.target.target_destcription}<br/>` : ''}
+						${latest.lastUpdate}
+					</div>`,
+				color,
+				icon: 'drone'
+			});
+		});
+
+		return out;
+	});
+
+	// Generate path lines with ALL coordinates (not just start and latest)
+	// EXACT SAME AS OFFENSIVE DASHBOARD
+	let pathLines = $derived.by(() => {
+		const lines: Array<any> = [];
+
+		droneGroups.forEach((group) => {
+			if (!group.isExpanded) return;
+			if (!group.paths || group.paths.length < 2) return; // Need at least 2 points for a line
+
+			const color = getDroneColor(group.droneId);
+			
+			// Build full path coordinates array
+			const coordinates = group.paths.map(drone => 
+				[drone.coordinates.lng, drone.coordinates.lat] as [number, number]
+			);
+
+			lines.push({
+				id: group.droneId,
+				coordinates,
+				color
+			});
+		});
+
+		return lines;
+	});
+
+	// Generate camera markers for defensive map - SAME AS DEFENSIVE DASHBOARD
 	let cameraMarkers = $derived(
 		cameras.map((c) => ({
 			id: c.id,
@@ -170,9 +304,17 @@
 		}))
 	);
 
-	// Filter drones and cameras based on search
-	let filteredDrones = $derived(
-		drones.filter((d) => d.name.toLowerCase().includes(droneSearchQuery.toLowerCase()))
+	// Generate drone markers for defensive map (from detections)
+	let defensiveDroneMarkers = $derived(
+		Array.from(latestDronePositions.values()).map(({ timestamp, ...drone }) => drone)
+	);
+
+	// Combine camera and drone markers for defensive map - SAME AS DEFENSIVE DASHBOARD
+	let defensiveMarkers = $derived([...defensiveDroneMarkers]);
+
+	// Filter drone groups based on search
+	let filteredGroups = $derived(
+		droneGroups.filter((g) => g.name.toLowerCase().includes(droneSearchQuery.toLowerCase()))
 	);
 
 	let filteredCameras = $derived(
@@ -182,32 +324,441 @@
 		)
 	);
 
-	function toggleDroneStatus(droneId: string) {
-		const drone = drones.find((d) => d.id === droneId);
-		if (drone) {
-			drone.status = drone.status === 'connected' ? 'disconnected' : 'connected';
+	// Toggle group expansion
+	function toggleGroupExpansion(droneId: string) {
+		const group = droneGroups.find((g) => g.droneId === droneId);
+		if (group) {
+			group.isExpanded = !group.isExpanded;
 		}
 	}
 
 	function selectDrone(drone: Drone) {
 		selectedDrone = drone;
-		droneMapCenter = [drone.startCoordinates.lng, drone.startCoordinates.lat];
+		// Center map on selected drone
+		if (drone.status === 'connected') {
+			droneMapCenter = [drone.coordinates.lng, drone.coordinates.lat];
+		}
 	}
 
 	function selectCamera(camera: Camera) {
 		selectedCamera = camera;
+		selectedCameraId = camera.id;
 		cameraMapCenter = [camera.coordinates.lng, camera.coordinates.lat];
+	}
+
+	function getCameraName(cameraId: string): string {
+		const camera = cameras.find(c => c.id === cameraId);
+		return camera?.name || 'Unknown Camera';
+	}
+
+	function disconnectCamera(cameraId: string) {
+		const ws = detectionWsConnections.get(cameraId);
+		if (ws) {
+			ws.close();
+			detectionWsConnections.delete(cameraId);
+		}
+	}
+
+	// Upload model file via MQTT - SAME AS DEFENSIVE DASHBOARD
+	async function uploadModel(event: Event) {
+		const input = event.target as HTMLInputElement;
+		const file = input.files?.[0];
+
+		if (!file) return;
+
+		// Validate file extension
+		const validExtensions = ['.pt', '.onnx', '.pb', '.tflite', '.pth'];
+		const fileExt = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+		if (!validExtensions.includes(fileExt)) {
+			alert(`Invalid file type. Supported: ${validExtensions.join(', ')}`);
+			input.value = '';
+			return;
+		}
+
+		isUploadingModel = true;
+		uploadProgress = `Uploading ${file.name}...`;
+
+		try {
+			const formData = new FormData();
+			formData.append('file', file);
+			formData.append('encode_base64', 'true');
+
+			const response = await fetch(`${apiUrl}/mqtt/upload-file`, {
+				method: 'POST',
+				body: formData
+			});
+
+			const result = await response.json();
+
+			if (!response.ok || !result.success) {
+				throw new Error(result.error || 'Upload failed');
+			}
+
+			uploadProgress = `Successfully uploaded ${file.name}`;
+			alert(`Model uploaded successfully!\n\nFile: ${result.filename}\nSize: ${(result.size / 1024).toFixed(2)} KB\nTopic: ${result.topic}`);
+
+			input.value = '';
+
+			setTimeout(() => {
+				uploadProgress = '';
+			}, 3000);
+		} catch (error) {
+			console.error('Failed to upload model:', error);
+			uploadProgress = '';
+			alert(`Failed to upload model: ${error instanceof Error ? error.message : 'Unknown error'}`);
+			input.value = '';
+		} finally {
+			isUploadingModel = false;
+		}
+	}
+
+	// Search detection history
+	async function searchDetectionHistory() {
+		if (!startDate || !endDate) {
+			searchError = 'กรุณาเลือกวันที่เริ่มต้นและสิ้นสุด';
+			return;
+		}
+
+		isSearching = true;
+		searchError = '';
+		try {
+			const params = new URLSearchParams({
+				start_date: startDate,
+				end_date: endDate,
+				page: '1',
+				limit: '50'
+			});
+
+			// Add selected camera IDs if any
+			if (selectedCameraIds.size > 0) {
+				Array.from(selectedCameraIds).forEach(id => {
+					params.append('camera_ids', id);
+				});
+			}
+
+			const response = await fetch(`${apiUrl}/detect?${params}`);
+			const result = await response.json();
+
+			if (result.success && result.data) {
+				const detects = result.data.detects || [];
+				filteredDetections = detects.map((detect: any) => {
+					const camera = cameras.find(c => c.id === detect.camera_id);
+					const objects = detect.objects || [];
+					return {
+						id: String(detect.id),
+						cameraId: detect.camera_id,
+						cameraName: camera?.name || 'Unknown',
+						droneId: objects[0]?.track_id || 'Unknown',
+						detectedAt: new Date(detect.timestamp).toLocaleString('th-TH'),
+						coordinates: {
+							lat: objects[0]?.lat || 13.7563,
+							lng: objects[0]?.lon || 100.5018
+						},
+						objectCount: objects.length
+					};
+				});
+				showHistory = true;
+			} else {
+				searchError = 'ไม่พบข้อมูล';
+			}
+		} catch (error) {
+			console.error('Failed to search detection history:', error);
+			searchError = 'เกิดข้อผิดพลาดในการค้นหา';
+		} finally {
+			isSearching = false;
+		}
+	}
+
+	// Transform attack data to drone (SAME AS OFFENSIVE DASHBOARD)
+	function transformAttackToDrone(attack: AttackData): Drone {
+		return {
+			id: `${attack.drone_id}-${attack.id}`,
+			trackingId: attack.drone_id,
+			name: `Drone ID: ${attack.drone_id}`,
+			status: attack.status.toLowerCase() === 'good' || attack.status.toLowerCase() === 'done' ? 'connected' : 'disconnected',
+			location: 'ภาคกลาง, กรุงเทพ',
+			coordinates: {
+				lat: attack.lat,
+				lng: attack.lng
+			},
+			gpsStatus: attack.status.toLowerCase() === 'good' || attack.status.toLowerCase() === 'done' ? 'good' : 'loss',
+			lastUpdate: new Date(attack.created_at).toLocaleString('th-TH', {
+				year: 'numeric',
+				month: '2-digit',
+				day: '2-digit',
+				hour: '2-digit',
+				minute: '2-digit',
+				hour12: false
+			}),
+			height: attack.height,
+			velocity: attack.velocity,
+			acceleration: attack.acceleration,
+			distance: attack.distance,
+			timeLeft: attack.time_left || 0,
+			target: attack.target,
+			land: attack.land
+		};
+	}
+
+	// Update drone groups (group by drone_id) - SAME AS OFFENSIVE DASHBOARD
+	function updateDroneGroups() {
+		const grouped = new Map<string, Drone[]>();
+
+		// Group drones by trackingId
+		allDrones.forEach((drone) => {
+			if (!grouped.has(drone.trackingId)) {
+				grouped.set(drone.trackingId, []);
+			}
+			grouped.get(drone.trackingId)!.push(drone);
+		});
+
+		// Convert to DroneGroup array
+		droneGroups = Array.from(grouped.entries()).map(([droneId, paths]) => {
+			// Sort by time (oldest to newest)
+			paths.sort((a, b) => {
+				const timeA = new Date(a.lastUpdate).getTime();
+				const timeB = new Date(b.lastUpdate).getTime();
+				return timeA - timeB;
+			});
+
+			const latestDrone = paths[paths.length - 1];
+			const existingGroup = droneGroups.find((g) => g.droneId === droneId);
+
+			return {
+				droneId,
+				name: `Drone ID: ${droneId}`,
+				paths,
+				isExpanded: existingGroup?.isExpanded ?? true, // Default: expanded (show all drones)
+				lastStatus: latestDrone.status,
+				lastGpsStatus: latestDrone.gpsStatus,
+				latestUpdate: latestDrone.lastUpdate
+			};
+		});
+	}
+
+	// Fetch offensive drones from Attack API - SAME AS OFFENSIVE DASHBOARD
+	async function fetchAttackData() {
+		try {
+			const response = await fetch(ATTACK_API_URL);
+			const result = await response.json();
+
+			if (result.success && result.data.attacks) {
+				// Transform and add initial data
+				const drones = result.data.attacks.map((attack: AttackData) => transformAttackToDrone(attack));
+				allDrones = drones;
+				updateDroneGroups();
+
+				// Set map center to first drone
+				if (allDrones.length > 0) {
+					droneMapCenter = [allDrones[0].coordinates.lng, allDrones[0].coordinates.lat];
+				}
+			}
+		} catch (error) {
+			console.error('Failed to fetch attack data:', error);
+		}
+	}
+
+	// Connect to Attack WebSocket - SAME AS OFFENSIVE DASHBOARD
+	function connectAttackWebSocket() {
+		if (attackWs) return;
+
+		attackWs = new WebSocket(ATTACK_WS_URL);
+
+		attackWs.onopen = () => {
+			console.log('✅ Attack WebSocket connected');
+		};
+
+		attackWs.onmessage = (event) => {
+			try {
+				const data = JSON.parse(event.data);
+				console.log('📨 Received attack data:', data);
+
+				// Handle confirmation message
+				if (data.status === 'connected') {
+					console.log('✅ Subscribed to attack data stream');
+					return;
+				}
+
+				// Handle attack data format (single attack from broadcast)
+				if (data.drone_id) {
+					// Single attack data format - append
+					const newDrone = transformAttackToDrone(data);
+					const exists = allDrones.some((d) => d.id === newDrone.id);
+					if (!exists) {
+						allDrones = [...allDrones, newDrone];
+						updateDroneGroups();
+
+						// Update map center to latest drone
+						const latest = allDrones[allDrones.length - 1];
+						droneMapCenter = [latest.coordinates.lng, latest.coordinates.lat];
+					}
+				}
+			} catch (error) {
+				console.error('Error parsing attack WebSocket message:', error);
+			}
+		};
+
+		attackWs.onclose = () => {
+			console.log('🔌 Attack WebSocket disconnected');
+			attackWs = null;
+			setTimeout(connectAttackWebSocket, 3000);
+		};
+	}
+
+	// Fetch defensive cameras from Camera API
+	async function fetchCameras() {
+		isLoadingCameras = true;
+		try {
+			const response = await fetch(`${apiUrl}/camera?page=1&limit=50`);
+			const result = await response.json();
+
+			if (result.success && result.data) {
+				cameras = (result.data.cameras || []).map((cam: CameraData) => ({
+					id: cam.id,
+					name: cam.name,
+					status: 'online' as const,
+					location: cam.location || cam.institute || 'ไม่ระบุตำแหน่ง',
+					coordinates: {
+						lat: cam.latitude || 13.7563,
+						lng: cam.longitude || 100.5018
+					}
+				}));
+
+				// Auto-select first 3 cameras for detection feed
+				if (cameras.length > 0) {
+					cameras.slice(0, 3).forEach(cam => {
+						selectedCameraIds.add(cam.id);
+						connectDetectionWebSocket(cam.id);
+					});
+				}
+			}
+		} catch (error) {
+			console.error('Failed to fetch cameras:', error);
+		} finally {
+			isLoadingCameras = false;
+		}
+	}
+
+	// Connect to Detection WebSocket for a camera
+	function connectDetectionWebSocket(cameraId: string) {
+		if (detectionWsConnections.has(cameraId)) return;
+
+		const ws = new WebSocket(wsUrl);
+
+		ws.onopen = () => {
+			console.log(`Detection WebSocket connected for camera: ${cameraId}`);
+			ws.send(JSON.stringify({ camera_id: cameraId }));
+		};
+
+		ws.onmessage = (event) => {
+			try {
+				const data = JSON.parse(event.data);
+				if (data.status === 'subscribed') return;
+
+				if (data.id && data.camera_id) {
+					const camera = cameras.find(c => c.id === data.camera_id);
+					const objects = data.objects || [];
+					
+					const newDetection: Detection = {
+						id: String(data.id),
+						cameraId: data.camera_id,
+						cameraName: camera?.name || 'Unknown',
+						droneId: objects[0]?.track_id || 'Unknown',
+						detectedAt: new Date(data.timestamp).toLocaleString('th-TH'),
+						coordinates: {
+							lat: objects[0]?.lat || 13.7563,
+							lng: objects[0]?.lon || 100.5018
+						},
+						objectCount: objects.length
+					};
+
+					detections = [newDetection, ...detections].slice(0, 10);
+
+					// Update drone markers on defensive map
+					objects.forEach((o: any) => {
+						const lat = o.lat ?? o.latitude;
+						const lng = o.lng ?? o.lon ?? o.longitude;
+						const trackId = o.track_id;
+
+						if (lat != null && lng != null && trackId != null) {
+							const latNum = typeof lat === 'string' ? parseFloat(lat) : Number(lat);
+							const lngNum = typeof lng === 'string' ? parseFloat(lng) : Number(lng);
+
+							if (!Number.isNaN(latNum) && !Number.isNaN(lngNum)) {
+								const cameraName = getCameraName(data.camera_id);
+								const popup = `
+									<div style="font-size:13px">
+										<strong>${cameraName}</strong><br/>
+										Track ID: ${trackId}<br/>
+										${new Date(data.timestamp).toLocaleString()}
+									</div>`;
+
+								latestDronePositions.set(trackId, {
+									lngLat: [lngNum, latNum],
+									popup,
+									color: '#ef4444',
+									icon: 'drone',
+									kind: 'latest',
+									timestamp: Date.now()
+								});
+							}
+						}
+					});
+
+					// Limit drones on map
+					if (latestDronePositions.size > MAX_DRONES_ON_MAP) {
+						const sorted = Array.from(latestDronePositions.entries())
+							.sort((a, b) => b[1].timestamp - a[1].timestamp);
+						latestDronePositions.clear();
+						sorted.slice(0, MAX_DRONES_ON_MAP).forEach(([id, pos]) => {
+							latestDronePositions.set(id, pos);
+						});
+					}
+				}
+			} catch (error) {
+				console.error('Error parsing detection WebSocket message:', error);
+			}
+		};
+
+		ws.onclose = () => {
+			console.log(`Detection WebSocket disconnected for camera: ${cameraId}`);
+			detectionWsConnections.delete(cameraId);
+			if (selectedCameraIds.has(cameraId)) {
+				setTimeout(() => connectDetectionWebSocket(cameraId), 3000);
+			}
+		};
+
+		detectionWsConnections.set(cameraId, ws);
 	}
 
 	onMount(() => {
 		console.log('Battle Dashboard mounted');
 
-		// keep the displayed time up-to-date
+		// Fetch initial data
+		Promise.all([
+			fetchAttackData(),
+			fetchCameras()
+		]);
+
+		// Connect WebSockets
+		connectAttackWebSocket();
+
+		// Update time
 		const t = setInterval(() => {
 			currentTime = new Date();
 		}, 1000);
 
-		return () => clearInterval(t);
+		return () => {
+			clearInterval(t);
+			// Cleanup WebSockets
+			attackWs?.close();
+			detectionWsConnections.forEach(ws => ws.close());
+		};
+	});
+
+	onDestroy(() => {
+		attackWs?.close();
+		detectionWsConnections.forEach(ws => ws.close());
 	});
 </script>
 
@@ -217,6 +768,8 @@
 
 <div class="w-screen h-screen flex flex-col bg-gray-100 overflow-hidden">
 	<!-- Header -->
+	 	<button onclick={() => goto("/")}>Back</button>
+
     <header class="bg-gradient-to-br from-indigo-500 to-purple-600 text-white px-8 py-2 shadow-lg z-10">
         <div class="flex justify-between items-center gap-8 max-w-full">
             <div class="flex items-center gap-4">
@@ -258,7 +811,7 @@
 							<span>🚁</span>
 							Offense
 							<span class="bg-purple-500 text-white px-2 py-0.5 rounded-xl text-xs font-semibold">
-								Drones {drones.length} ตัว
+								{droneGroups.length} Drones ({allDrones.length} paths)
 							</span>
 						</h2>
     
@@ -272,29 +825,33 @@
 				</div>
 
 				<div class="flex-1 flex gap-2 overflow-y-auto p-2 list-scrollbar">
-					{#each filteredDrones as drone (drone.id)}
+					{#each filteredGroups as group (group.droneId)}
 						<div
-							class="flex flex-col text-nowrap justify-between items-center p-2 rounded-lg border-2 border-gray-200 bg-white mb-1 cursor-pointer transition-all duration-200 hover:bg-gray-50"
+							class="flex flex-col text-nowrap justify-between items-center p-2 rounded-lg border-2 bg-white mb-1 cursor-pointer transition-all duration-200 hover:bg-gray-50"
+							style="border-left: 3px solid {getDroneColor(group.droneId)};"
 							role="button"
 							tabindex="0"
-							onclick={() => selectDrone(drone)}
-							onkeydown={(e) => e.key === 'Enter' && selectDrone(drone)}
+							onclick={() => toggleGroupExpansion(group.droneId)}
+							onkeydown={(e) => e.key === 'Enter' && toggleGroupExpansion(group.droneId)}
 						>
-							<div class="flex items-center mb-2">
-								<span class="text-sm font-bold text-gray-800">{drone.name}</span>
+							<div class="flex items-center mb-1 gap-2">
+								<div 
+									class="w-2 h-2 rounded-full" 
+									style="background-color: {getDroneColor(group.droneId)};"
+								></div>
+								<span class="text-xs">{group.isExpanded ? '🔽' : '▶️'}</span>
+								<span class="text-sm font-bold text-gray-800">{group.name}</span>
+								<span class="text-xs text-gray-500">({group.paths.length})</span>
 							</div>
 							<button
 								class="px-2 py-0.5 rounded-xl text-xs font-semibold"
-								class:bg-green-100={drone.status === 'connected'}
-								class:text-green-800={drone.status === 'connected'}
-								class:bg-red-100={drone.status === 'disconnected'}
-								class:text-red-800={drone.status === 'disconnected'}
-								onclick={(e) => {
-									e.stopPropagation();
-									toggleDroneStatus(drone.id);
-								}}
+								class:bg-green-100={group.lastStatus === 'connected'}
+								class:text-green-800={group.lastStatus === 'connected'}
+								class:bg-red-100={group.lastStatus === 'disconnected'}
+								class:text-red-800={group.lastStatus === 'disconnected'}
+								onclick={(e) => e.stopPropagation()}
 							>
-								{drone.status === 'connected' ? '🟢 Connected' : '🔴 Disconnected'}
+								{group.lastStatus === 'connected' ? '🟢 Connect' : '🔴 Disconnect'}
 							</button>
 						</div>
 					{/each}
@@ -306,13 +863,13 @@
 				<MapboxMap
 					accessToken={mapboxToken}
 					center={droneMapCenter}
-					zoom={12}
-					markers={droneMarkers}
-					drawLines={true}
+					zoom={17}
+					{markers}
+					{pathLines}
 				/>
 				<div class="absolute bottom-3 right-3 bg-white px-3 py-2 rounded-lg shadow-md flex gap-3 text-xs">
-					<span class="text-blue-500">● มี GPS</span>
-					<span class="text-red-500">● ไม่มี GPS</span>
+					<span class="text-green-500">● สัญญาณ GPS</span>
+					<span class="text-red-500">● ไม่มีสัญญาณ GPS</span>
 				</div>
 			</div>
 
@@ -325,36 +882,48 @@
 				{#if selectedDrone}
 					<div class="p-2 mb-2 border-2 border-gray-200 rounded-lg">
 						<h3 class="m-0 mb-2 text-xs font-bold text-purple-600">{selectedDrone.name}</h3>
-						<div class="flex mb-2">
-							<div class="w-1/4 text-xs text-gray-600 font-semibold">เริ่มบิน:</div>
-							<div class="w-3/4 flex gap-8">
-								<div class="text-xs text-gray-800 font-medium">{selectedDrone.startDate}</div>
-								<div class="text-xs text-gray-500">📍 {selectedDrone.startCoordinates.lat.toFixed(4)}, {selectedDrone.startCoordinates.lng.toFixed(4)}</div>
+						<div class="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+							<div>
+								<span class="text-gray-600">ตำแหน่ง:</span>
+								<span class="font-medium text-gray-800 ml-1">{selectedDrone.coordinates.lat.toFixed(4)}, {selectedDrone.coordinates.lng.toFixed(4)}</span>
 							</div>
-						</div>
-						<div class="flex mb-2">
-							<div class="w-1/4 text-xs text-gray-600 font-semibold">ปลายทาง:</div>
-							<div class="w-3/4 flex gap-8">
-								<div class="text-xs text-gray-800 font-medium">{selectedDrone.endDate}</div>
-								<div class="text-xs text-gray-500">📍 {selectedDrone.endCoordinates.lat.toFixed(4)}, {selectedDrone.endCoordinates.lng.toFixed(4)}</div>
+							<div>
+								<span class="text-gray-600">ความสูง:</span>
+								<span class="font-medium text-gray-800 ml-1">{selectedDrone.height.toFixed(2)} ม.</span>
 							</div>
-						</div>
-                        <div class="flex mb-2">
-							<div class="w-1/4 text-xs text-gray-600 font-semibold">ระยะทาง:</div>
-							<div class="w-3/4">
-								<div class="text-xs text-gray-600">{selectedDrone.distance ?? 'N/A'} km</div>
+							<div>
+								<span class="text-gray-600">ความเร็ว:</span>
+								<span class="font-medium text-gray-800 ml-1">{Math.sqrt(selectedDrone.velocity.x**2 + selectedDrone.velocity.y**2 + selectedDrone.velocity.z**2).toFixed(2)} m/s</span>
 							</div>
-						</div>
-                        <div class="flex mb-2">
-							<div class="w-1/4 text-xs text-gray-600 font-semibold">ความเร็วเฉลี่ย:</div>
-							<div class="w-3/4">
-								<div class="text-xs text-gray-600">{selectedDrone.avgSpeed ?? 'N/A'} km/h</div>
+							<div>
+								<span class="text-gray-600">ความเร่ง:</span>
+								<span class="font-medium text-gray-800 ml-1">{Math.sqrt(selectedDrone.acceleration.x**2 + selectedDrone.acceleration.y**2 + selectedDrone.acceleration.z**2).toFixed(2)} m/s²</span>
 							</div>
-						</div>
-                        <div class="flex">
-							<div class="w-1/4 text-xs text-gray-600 font-semibold">ความเร่งเฉลี่ย:</div>
-							<div class="w-3/4">
-								<div class="text-xs text-gray-600">{selectedDrone.avgAcceleration ?? 'N/A'} m/s²</div>
+							<div>
+								<span class="text-gray-600">ระยะทาง:</span>
+								<span class="font-medium text-gray-800 ml-1">{selectedDrone.distance.toFixed(2)} ม.</span>
+							</div>
+							<div>
+								<span class="text-gray-600">เวลาคงเหลือ:</span>
+								<span class="font-medium text-gray-800 ml-1">{selectedDrone.timeLeft.toFixed(0)} วินาที</span>
+							</div>
+							{#if selectedDrone.target}
+								<div class="col-span-2 mt-1 pt-1 border-t border-gray-200">
+									<span class="text-gray-600">🎯 Target:</span>
+									<span class="font-medium text-gray-800 ml-1">{selectedDrone.target.target_destcription}</span>
+									<span class="text-gray-500 ml-1 text-xs">({selectedDrone.target.lat.toFixed(4)}, {selectedDrone.target.lng.toFixed(4)})</span>
+								</div>
+							{/if}
+							{#if selectedDrone.land}
+								<div class="col-span-2">
+									<span class="text-gray-600">🛬 Landing:</span>
+									<span class="font-medium text-gray-800 ml-1">{selectedDrone.land.target_destcription}</span>
+									<span class="text-gray-500 ml-1 text-xs">({selectedDrone.land.lat.toFixed(4)}, {selectedDrone.land.lng.toFixed(4)})</span>
+								</div>
+							{/if}
+							<div class="col-span-2">
+								<span class="text-gray-600">เวลา:</span>
+								<span class="font-medium text-gray-800 ml-1">{selectedDrone.lastUpdate}</span>
 							</div>
 						</div>
 					</div>
@@ -398,7 +967,7 @@
 							onkeydown={(e) => e.key === 'Enter' && selectCamera(camera)}
 						>
 							<div class="flex justify-between items-center mb-2">
-								<span class="text-sm font-bold text-gray-800">{camera.id}</span>
+								<span class="text-sm font-bold text-gray-800">{camera.name}</span>
 								<span
 									class="w-1.5 h-1.5 rounded-full"
 									class:bg-green-500={camera.status === 'online'}
@@ -422,89 +991,215 @@
                             accessToken={mapboxToken}
                             center={cameraMapCenter}
                             zoom={12}
-                            markers={cameraMarkers}
+                            markers={defensiveMarkers}
                         />
                     </div>
+                    <!-- Video Stream -->
                     <div class="bg-white rounded-xl shadow-md overflow-hidden flex-1">
-                        Stream
+                        {#if selectedCameraId}
+                            <VideoStream serverUrl={videoServerUrl} />
+                        {:else}
+                            <div class="w-full h-full flex items-center justify-center text-gray-400">
+                                <p>เลือกกล้องเพื่อดู Stream</p>
+                            </div>
+                        {/if}
                     </div>
                 </div>
                 <!-- Detection History -->
                 <div class="w-1/3 bg-white rounded-xl shadow-md p-3">
-                    <!-- Model Upload Section -->
-                    <div class="w-full">
-                        <div class="mb-2">
-                            <div class="flex items-center gap-2">
-                                <span class="text-2xl">🤖</span>
-                                <div>
-                                    <h3 class="font-bold text-gray-800 text-sm">Current Model</h3>
-                                    <p class="text-xs text-gray-600">YOLO v8 NCNN Model 960</p>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="relative">
-                            <input 
-                                id="file-upload" 
-                                type="file" 
-                                accept=".pt,.onnx,.pb,.tflite"
-                                class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" 
-                            />
-                            <div class="flex items-center justify-center gap-2 px-2 py-2 bg-indigo-50 border-2 border-dashed border-indigo-300 rounded-lg hover:bg-indigo-100 hover:border-indigo-400 transition-all cursor-pointer">
-                                <span class="text-lg">📦</span>
-                                <span class="text-sm font-medium text-indigo-700">Upload New Model</span>
-                            </div>
-                            <p class="text-xs text-gray-500 mt-1 text-center">Supported: .pt, .onnx, .pb, .tflite</p>
-                        </div>
-                    </div>
+					<!-- Model Upload Section - SAME AS DEFENSIVE DASHBOARD -->
+					<div class="w-full">
+						<div class="bg-gradient-to-r from-indigo-50 to-blue-50 rounded-lg p-4 mb-3">
+							<div class="flex items-center gap-2 mb-2">
+								<span class="text-2xl">🤖</span>
+								<div>
+									<h3 class="font-bold text-gray-800 text-sm">Current Model</h3>
+									<p class="text-xs text-gray-600">YOLO v8 NCNN Model 960</p>
+								</div>
+							</div>
+							<div class="bg-white rounded px-2 py-1.5 text-xs text-indigo-600 font-semibold">
+								✓ Ready to detect
+							</div>
+						</div>
 
-                    <div class="flex flex-col gap-1 border-y border-gray-200 pb-4 my-2">
-                        <div class="flex-1 mt-1">
-                            <label for="start-date" class="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
-                            <input id="start-date" type="date" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" />
-                        </div>
-                        <div class="flex-1">
-                            <label for="end-date" class="block text-sm font-medium text-gray-700 mb-1">End Date</label>
-                            <input id="end-date" type="date" class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" />
-                        </div>
-                        <button 
-                            onclick={() => showHistory = !showHistory}
-                            class="w-full mt-2 px-4 py-2.5 bg-gradient-to-r from-green-400 to-emerald-400 text-white font-semibold text-sm rounded-lg shadow-md hover:from-green-600 hover:to-emerald-700 transition-all duration-200 active:scale-95"
-                        >
-                            {showHistory ? '📜 Back to Feed' : '🔍 Search History'}
-                        </button>
-                    </div>
+						<label for="file-upload-defensive" class="block text-sm font-semibold text-gray-700 mb-2">Upload New Model</label>
+						<div class="relative">
+							<input 
+								id="file-upload-defensive" 
+								type="file" 
+								accept=".pt,.onnx,.pb,.tflite,.pth"
+								class="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+								onchange={uploadModel}
+								bind:this={fileInputRef}
+								disabled={isUploadingModel}
+							/>
+							<div class="flex items-center justify-center gap-2 px-4 py-3 bg-indigo-50 border-2 border-dashed border-indigo-300 rounded-lg hover:bg-indigo-100 hover:border-indigo-400 transition-all cursor-pointer {isUploadingModel ? 'opacity-50 cursor-not-allowed' : ''}">
+								{#if isUploadingModel}
+									<span class="text-lg animate-spin">⌛</span>
+									<span class="text-sm font-medium text-indigo-700">Uploading...</span>
+								{:else}
+									<span class="text-lg">📦</span>
+									<span class="text-sm font-medium text-indigo-700">Select model file</span>
+								{/if}
+							</div>
+							<p class="text-xs text-gray-500 mt-1.5 text-center">Supported: .pt, .onnx, .pb, .tflite</p>
+							{#if uploadProgress}
+								<p class="text-xs text-green-600 mt-1.5 text-center font-medium">{uploadProgress}</p>
+							{/if}
+						</div>
+					</div>					<div class="flex flex-col gap-1 border-y border-gray-200 pb-4 my-2">
+						<div class="flex-1 mt-1">
+							<label for="start-date" class="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+							<input id="start-date" type="date" bind:value={startDate} class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" />
+						</div>
+						<div class="flex-1">
+							<label for="end-date" class="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+							<input id="end-date" type="date" bind:value={endDate} class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" />
+						</div>
+						{#if searchError}
+							<p class="text-xs text-red-500 mt-1">{searchError}</p>
+						{/if}
+						<button 
+							onclick={searchDetectionHistory}
+							disabled={isSearching || !startDate || !endDate}
+							class="w-full px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-medium text-sm"
+						>
+							{#if isSearching}
+								กำลังค้นหา...
+							{:else}
+								ค้นหา
+							{/if}
+						</button>
+						{#if filteredDetections.length > 0}
+							<p class="text-sm text-green-600 text-center font-medium">
+								พบ {filteredDetections.length} รายการ
+							</p>
+						{/if}
+					</div>
+					
+					<!-- Detection Feed - SAME AS DEFENSIVE DASHBOARD -->
+					<div class="w-full border-t border-gray-200 pt-2">
+						<div class="flex justify-between items-center mb-3">
+							<h2 class="m-0 text-lg flex items-center gap-2 text-gray-800 font-bold">
+								<span class="inline-block">📋</span>
+								All Detections
+								<span class="bg-indigo-500 text-white px-2 py-0.5 rounded-xl text-xs font-semibold">
+									{detections.length}
+								</span>
+							</h2>
+						</div>
 
-                    {#if !showHistory}
-                        <h2 class="m-0 mb-2 text-sm text-gray-800 font-bold flex items-center gap-2">
-                            <span>🎯</span>
-                            Detection Feed
-                        </h2>
-                        {#each detections as detection (detection.id)}
-                            <div class="flex gap-2 p-2 mb-2 border-2 border-gray-200 rounded-lg">
-                                <div class="w-16 h-16 shrink-0 bg-gray-200 rounded-lg flex items-center justify-center">
-                                    <span class="text-2xl">📷</span>
-                                </div>
-                                <div class="flex-1">
-                                    <h3 class="m-0 mb-1 text-xs font-bold text-blue-600">{detection.cameraName}</h3>
-                                    <h3 class="text-xs text-gray-500 font-normal ml-1">{detection.detectedAt}</h3>
-                                    <h3>ตรวจพบโดรน 3</h3>
-                                </div>
-                            </div>
-                        {/each}
-                    {:else}
-                        <h2 class="m-0 mb-2 text-sm text-gray-800 font-bold flex items-center gap-2">
-                            <span>📜</span>
-                            Detection History
-                        </h2>
-                        <div class="text-center py-8 text-gray-500">
-                            <p class="text-sm">ประวัติการตรวจจับจากวันที่ที่เลือก</p>
-                        </div>
-                    {/if}
+						<div class="flex flex-col gap-4 overflow-y-auto py-2 flex-1 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 hover:scrollbar-thumb-gray-400">
+							{#if detections.length === 0}
+								<div class="flex flex-col items-center justify-center w-full p-8 text-center text-gray-400">
+									<div class="text-4xl mb-2 opacity-50">📷</div>
+									<p class="my-1 font-medium text-gray-600">No detections yet</p>
+									<small class="text-sm">Select cameras to start monitoring...</small>
+								</div>
+							{:else}
+								{#each detections as detection (detection.id)}
+									<div class="flex gap-3 p-3 mb-2 border-2 border-gray-200 rounded-lg hover:border-indigo-300 transition-all cursor-pointer bg-white hover:shadow-md">
+										<div class="w-16 h-16 shrink-0 bg-gradient-to-br from-indigo-100 to-blue-100 rounded-lg flex items-center justify-center">
+											<span class="text-2xl">📷</span>
+										</div>
+										<div class="flex-1">
+											<h3 class="m-0 mb-1 text-sm font-bold text-indigo-600">{detection.cameraName}</h3>
+											<p class="text-xs text-gray-500 mb-1">{detection.detectedAt}</p>
+											<div class="flex items-center gap-2">
+												<span class="px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-xs font-semibold">
+													🚁 {detection.objectCount || 0} drone{detection.objectCount !== 1 ? 's' : ''}
+												</span>
+											</div>
+										</div>
+									</div>
+								{/each}
+							{/if}
+						</div>
+					</div>
                 </div>
             </div>
 		</div>
 	</main>
 </div>
+
+<!-- Search Results Modal - SAME AS DEFENSIVE DASHBOARD -->
+{#if showSearchModal}
+	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" onclick={() => showSearchModal = false} onkeydown={(e) => e.key === 'Escape' && (showSearchModal = false)} role="button" tabindex="0">
+		<div class="bg-white rounded-xl shadow-2xl w-[90vw] h-[85vh] flex flex-col" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.stopPropagation()} role="dialog" aria-modal="true" tabindex="-1">
+			<!-- Modal Header -->
+			<div class="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+				<div>
+					<h2 class="text-xl font-bold text-gray-800">ผลการค้นหา</h2>
+					<p class="text-sm text-gray-600 mt-1">
+						{startDate} - {endDate}
+						<span class="ml-2 bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full text-xs font-semibold">
+							พบ {filteredDetections.length} รายการ
+						</span>
+					</p>
+				</div>
+				<button 
+					onclick={() => showSearchModal = false}
+					class="text-gray-400 hover:text-gray-600 transition-colors"
+					aria-label="Close modal"
+				>
+					<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+					</svg>
+				</button>
+			</div>
+
+			<!-- Modal Content -->
+			<div class="flex-1 overflow-y-auto p-6">
+				{#if filteredDetections.length === 0}
+					<div class="flex flex-col items-center justify-center h-full text-gray-400">
+						<div class="text-6xl mb-4 opacity-50">🔍</div>
+						<p class="text-lg font-medium text-gray-600">ไม่พบรายการในช่วงเวลาที่เลือก</p>
+						<p class="text-sm text-gray-500 mt-2">ลองเปลี่ยนช่วงเวลาในการค้นหา</p>
+					</div>
+				{:else}
+					<div class="grid grid-cols-3 gap-4">
+						{#each filteredDetections as detection (detection.id)}
+							<div class="flex gap-3 p-4 border-2 border-gray-200 rounded-lg hover:border-indigo-300 transition-all cursor-pointer bg-white hover:shadow-md"
+								onclick={() => {
+									showSearchModal = false;
+								}}
+								onkeydown={(e) => e.key === 'Enter' && (showSearchModal = false)}
+								role="button"
+								tabindex="0"
+							>
+								<div class="w-20 h-20 shrink-0 bg-gradient-to-br from-indigo-100 to-blue-100 rounded-lg flex items-center justify-center">
+									<span class="text-3xl">📷</span>
+								</div>
+								<div class="flex-1">
+									<h3 class="m-0 mb-1 text-sm font-bold text-indigo-600">{detection.cameraName}</h3>
+									<p class="text-xs text-gray-500 mb-2">{detection.detectedAt}</p>
+									<div class="flex items-center gap-2">
+										<span class="px-2 py-1 bg-red-100 text-red-700 rounded-full text-xs font-semibold">
+											🚁 {detection.objectCount || 0} drone{detection.objectCount !== 1 ? 's' : ''}
+										</span>
+									</div>
+								</div>
+							</div>
+						{/each}
+					</div>
+				{/if}
+			</div>
+
+			<!-- Modal Footer -->
+			<div class="flex items-center justify-between px-6 py-4 border-t border-gray-200 bg-gray-50">
+				<div class="text-sm text-gray-600">
+					แสดง {filteredDetections.length} จากทั้งหมด {filteredDetections.length} รายการ
+				</div>
+				<button 
+					onclick={() => showSearchModal = false}
+					class="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors font-medium"
+				>
+					ปิด
+				</button>
+			</div>
+		</div>
+	</div>
+{/if}
 
 <style>
 	@keyframes pulse-slow {

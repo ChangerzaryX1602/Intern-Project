@@ -13,11 +13,14 @@ export interface Camera {
 export interface Detection {
 	id: number;
 	camera_id: string;
-	detected_at: string;
+	detected_at?: string;
+	timestamp?: string;
 	path: string;
-	detected_objects: DetectedObject[];
+	detected_objects?: DetectedObject[];
+	objects?: DetectedObject[];  // New MQTT format
 	image_base64?: string;
 	mime_type?: string;
+	camera?: Camera;
 }
 
 // Detected objects can come in different shapes depending on the stream
@@ -37,6 +40,16 @@ export interface DetectedObject {
 	objective?: string;
 	size?: string;
 	details?: any;
+
+	// MQTT detection format (new)
+	h?: number;
+	w?: number;
+	x?: number;
+	y?: number;
+	alt?: number;
+	lon?: number;
+	track_id?: number;
+	timestamp?: number;
 }
 
 export interface Pagination {

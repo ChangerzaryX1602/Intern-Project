@@ -198,6 +198,8 @@ func (h *detectHandler) CreateDetect() fiber.Handler {
 // @Param per_page query int false "Items per page"
 // @Param keyword query string false "Search filter"
 // @Param column query string false "Search column"
+// @Param start_date query string false "Start date (YYYY-MM-DD)"
+// @Param end_date query string false "End date (YYYY-MM-DD)"
 // @Router /api/v1/detect/ [get]
 // @Security ApiKeyAuth
 func (h *detectHandler) GetDetects() fiber.Handler {
@@ -232,7 +234,11 @@ func (h *detectHandler) GetDetects() fiber.Handler {
 			})
 		}
 
-		detects, p, s, err := h.service.GetDetects(pagination, filter)
+		// Get date range from query params
+		startDate := c.Query("start_date")
+		endDate := c.Query("end_date")
+
+		detects, p, s, err := h.service.GetDetects(pagination, filter, startDate, endDate)
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(helpers.ResponseForm{
 				Success: false,
