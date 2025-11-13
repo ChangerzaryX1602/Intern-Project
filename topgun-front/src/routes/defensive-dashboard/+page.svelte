@@ -9,6 +9,7 @@
 	import SearchResultCard from './SearchResultCard.svelte';
 	import type { Camera, Detection, Pagination } from './types';
 	import { goto } from '$app/navigation';
+	import HeightChart from '$lib/components/HeightOverTime.svelte';
 
 	// Environment variables
 	const mapboxToken = env.PUBLIC_MAPBOX_TOKEN || '';
@@ -575,7 +576,7 @@
 
 			<div class="flex justify-between h-[35%] w-full mt-6 gap-6">
 				<div class="bg-white rounded-xl shadow-md w-[37%]">
-					เอาไว้ทำไรเอาไว้ทำไรเอาไว้ทำไรเอ
+					<HeightChart/>
 				</div>
 
 				<div class="h-full bg-black w-full rounded-xl shadow-md">

@@ -259,14 +259,14 @@
 
 										{#if obj.alt !== undefined}
 											<div class="flex flex-col gap-1">
-												<span class="text-gray-600 font-medium">✈️ ความสูง</span>
+												<span class="text-gray-600 font-medium">✈️ Height</span>
 												<span class="text-gray-900">{formatNumber(obj.alt, 2)} m</span>
 											</div>
 										{/if}
 
 										{#if obj.timestamp !== undefined}
 											<div class="flex flex-col gap-1">
-												<span class="text-gray-600 font-medium">🕐 เวลาตรวจจับ</span>
+												<span class="text-gray-600 font-medium">🕐 Time Stamp</span>
 												<span class="text-gray-900 text-xs">{formatTimestamp(obj.timestamp)}</span>
 											</div>
 										{/if}
