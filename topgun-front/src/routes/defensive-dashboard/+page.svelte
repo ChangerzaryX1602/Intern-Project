@@ -520,60 +520,30 @@
 					onPrevPage={loadPrevPage}
 				/>
 				
-				<div class="h-full bg-gray-300 w-[70%]">
+				<div class="h-full bg-gray-300 w-[80%] rounded-xl shadow-md">
 					<MapboxMap accessToken={mapboxToken} center={mapCenter} zoom={12} {markers} />
 				</div>
 			</div>
 
-			<div class="flex h-[35%] mt-6">
-				<div class="flex gap-6">
-					<div class="bg-white min-w-[50%] rounded-xl shadow-md overflow-hidden relative flex flex-col gap-4 px-4 py-4"> 
-						เอาไว้ทำไร
-					</div>
+			<div class="flex justify-between h-[35%] w-full mt-6 gap-6">
+				<div class="bg-white rounded-xl shadow-md w-[37%]">
+					เอาไว้ทำไรเอาไว้ทำไรเอาไว้ทำไรเอ
 				</div>
 
-				<div class="h-full bg-black w-[60%]">
+				<div class="h-full bg-black w-full rounded-xl shadow-md">
 					<VideoStream serverUrl={videoServerUrl} showStats={true} autoReconnect={true} />
 				</div>
 			</div>
 		</section>
 		
-		<section class="bg-white rounded-xl shadow-md overflow-hidden relative flex">
+		<section class="bg-white rounded-xl shadow-md flex">
 			<div class="bg-white flex flex-col justify-between items-center px-4 py-4 gap-4 border-b border-gray-200">
 				<!-- Model Upload Section -->
 				<div class="w-full">
-					<div class="flex justify-between items-center mb-3">
-						<h2 class="m-0 text-lg flex items-center gap-2 text-gray-800 font-bold">
-							<span class="inline-block">📋</span>
-							All Detections
-							<span class="bg-indigo-500 text-white px-2 py-0.5 rounded-xl text-xs font-semibold">
-								{detections.length}
-							</span>
-						</h2>
+					<div class="flex items-center gap-2 mb-4">
+						<span class="text-2xl">🔍</span>
+						<h1 class="text-base font-bold text-gray-800">Search History</h1>
 					</div>
-
-					<div class="flex flex-col gap-4 overflow-y-auto py-2 flex-1 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 hover:scrollbar-thumb-gray-400">
-						{#if detections.length === 0}
-							<div class="flex flex-col items-center justify-center w-full p-8 text-center text-gray-400">
-								<div class="text-4xl mb-2 opacity-50">📷</div>
-								<p class="my-1 font-medium text-gray-600">No detections yet</p>
-								<small class="text-sm">Select cameras to start monitoring...</small>
-							</div>
-						{:else}
-							{#each detections as detection (detection.id)}
-								<DetectionCard
-									{detection}
-									isSelected={selectedDetection?.id === detection.id}
-									cameraName={getCameraName(detection.camera_id)}
-									onClick={() => selectDetection(detection)}
-								/>
-							{/each}
-						{/if}
-					</div>
-				</div>
-
-				<div class="bg-white rounded-xl shadow-md overflow-hidden relative flex flex-col gap-4 px-4 py-4"> 
-					<h1 class="text-lg font-bold text-gray-800">ค้นหาประวัติ</h1>
 					<div class="flex flex-col gap-3">
 						<div class="flex gap-3">
 							<div class="flex-1">
@@ -613,6 +583,35 @@
 							<p class="text-sm text-green-600 text-center font-medium">
 								พบ {filteredDetections.length} รายการ
 							</p>
+						{/if}
+					</div>
+
+					<div class="flex justify-between items-center mb-3 border-t border-gray-200 mt-3">
+						<h2 class="mt-2 text-lg flex items-center gap-2 text-gray-800 font-bold">
+							<span class="inline-block">📋</span>
+							All Detections
+							<span class="bg-indigo-500 text-white px-2 py-0.5 rounded-xl text-xs font-semibold">
+								{detections.length}
+							</span>
+						</h2>
+					</div>
+
+					<div class="flex flex-col gap-4 overflow-y-auto py-2 flex-1 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 hover:scrollbar-thumb-gray-400">
+						{#if detections.length === 0}
+							<div class="flex flex-col items-center justify-center w-full p-8 text-center text-gray-400">
+								<div class="text-4xl mb-2 opacity-50">📷</div>
+								<p class="my-1 font-medium text-gray-600">No detections yet</p>
+								<small class="text-sm">Select cameras to start monitoring...</small>
+							</div>
+						{:else}
+							{#each detections as detection (detection.id)}
+								<DetectionCard
+									{detection}
+									isSelected={selectedDetection?.id === detection.id}
+									cameraName={getCameraName(detection.camera_id)}
+									onClick={() => selectDetection(detection)}
+								/>
+							{/each}
 						{/if}
 					</div>
 				</div>
