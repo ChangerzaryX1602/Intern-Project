@@ -525,7 +525,7 @@
 	// Search detection history - SAME AS DEFENSIVE DASHBOARD
 	async function searchDetectionHistory() {
 		if (!startDate || !endDate) {
-			searchError = 'กรุณาเลือกวันที่เริ่มต้นและสิ้นสุด';
+			searchError = 'Please select start and end dates.';
 			return;
 		}
 
@@ -563,11 +563,11 @@
 				filteredDetections = detectionData;
 				showSearchModal = true;
 			} else {
-				searchError = 'ไม่พบข้อมูล';
+				searchError = 'No information found';
 			}
 		} catch (error) {
 			console.error('Failed to search detection history:', error);
-			searchError = 'เกิดข้อผิดพลาดในการค้นหา';
+			searchError = 'A search error occurred.';
 		} finally {
 			isSearching = false;
 		}
@@ -1035,7 +1035,7 @@
                         <input
 						type="text"
 						bind:value={droneSearchQuery}
-						placeholder="ค้นหา Drone..."
+						placeholder="Search Drone..."
 						class="w-1/2 px-3 py-1.5 border-2 border-gray-200 rounded-lg text-xs transition-all duration-200 bg-white focus:outline-none focus:border-purple-500"
 					/>
 					</div>
@@ -1091,8 +1091,8 @@
 					{pathLines}
 				/>
 				<div class="absolute bottom-3 right-3 bg-white px-3 py-2 rounded-lg shadow-md flex gap-3 text-xs">
-					<span class="text-green-500">● สัญญาณ GPS</span>
-					<span class="text-red-500">● ไม่มีสัญญาณ GPS</span>
+					<span class="text-green-500">● GPS signal</span>
+					<span class="text-red-500">● The GPS signal is disturbed.</span>
 				</div>
 			</div>
 
@@ -1101,7 +1101,7 @@
 				<div class="flex items-center justify-between mb-2">
 					<h2 class="m-0 text-sm text-gray-800 font-bold flex items-center gap-2">
 						<span>📜</span>
-						{selectedDrone ? `ประวัติการเดินทาง - ${selectedDrone.name}` : 'ประวัติการเดินทาง - ทั้งหมด'}
+						{selectedDrone ? `Flight route history - ${selectedDrone.name}` : 'Flight route history - all'}
 					</h2>
 					{#if selectedDrone}
 						<button
@@ -1121,28 +1121,28 @@
 						<h3 class="m-0 mb-2 text-xs font-bold text-purple-600">{selectedDrone.name}</h3>
 						<div class="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
 							<div>
-								<span class="text-gray-600">ตำแหน่ง:</span>
-								<span class="font-medium text-gray-800 ml-1">{selectedDrone.coordinates.lat.toFixed(4)}, {selectedDrone.coordinates.lng.toFixed(4)}</span>
+								<span class="text-gray-600">Location:</span>
+								<span class="font-medium text-gray-800 ml-1">lat. {selectedDrone.coordinates.lat.toFixed(4)}, long. {selectedDrone.coordinates.lng.toFixed(4)}</span>
 							</div>
 							<div>
-								<span class="text-gray-600">ความสูง:</span>
+								<span class="text-gray-600">Height:</span>
 								<span class="font-medium text-gray-800 ml-1">{selectedDrone.height.toFixed(2)} ม.</span>
 							</div>
 							<div>
-								<span class="text-gray-600">ความเร็ว:</span>
+								<span class="text-gray-600">Velocity:</span>
 								<span class="font-medium text-gray-800 ml-1">{Math.sqrt(selectedDrone.velocity.x**2 + selectedDrone.velocity.y**2 + selectedDrone.velocity.z**2).toFixed(2)} m/s</span>
 							</div>
 							<div>
-								<span class="text-gray-600">ความเร่ง:</span>
+								<span class="text-gray-600">Acceleration:</span>
 								<span class="font-medium text-gray-800 ml-1">{Math.sqrt(selectedDrone.acceleration.x**2 + selectedDrone.acceleration.y**2 + selectedDrone.acceleration.z**2).toFixed(2)} m/s²</span>
 							</div>
 							<div>
-								<span class="text-gray-600">ระยะทาง:</span>
-								<span class="font-medium text-gray-800 ml-1">{selectedDrone.distance.toFixed(2)} ม.</span>
+								<span class="text-gray-600">Distance:</span>
+								<span class="font-medium text-gray-800 ml-1">{selectedDrone.distance.toFixed(2)} m.</span>
 							</div>
 							<div>
-								<span class="text-gray-600">เวลาคงเหลือ:</span>
-								<span class="font-medium text-gray-800 ml-1">{selectedDrone.timeLeft.toFixed(0)} วินาที</span>
+								<span class="text-gray-600">Remaining time:</span>
+								<span class="font-medium text-gray-800 ml-1">{selectedDrone.timeLeft.toFixed(0)} sec.</span>
 							</div>
 							{#if selectedDrone.target}
 								<div class="col-span-2 mt-1 pt-1 border-t border-gray-200">
@@ -1159,7 +1159,7 @@
 								</div>
 							{/if}
 							<div class="col-span-2">
-								<span class="text-gray-600">เวลา:</span>
+								<span class="text-gray-600">Time stamp:</span>
 								<span class="font-medium text-gray-800 ml-1">{selectedDrone.lastUpdate}</span>
 							</div>
 						</div>
@@ -1217,13 +1217,13 @@
 							<span>📹</span>
 							Defense
 							<span class="bg-blue-500 text-white px-2 py-0.5 rounded-xl text-xs font-semibold">
-								Cameras {cameras.length} ตัว
+								{cameras.length} Cameras
 							</span>
 						</h2>
                         <input
 						type="text"
 						bind:value={cameraSearchQuery}
-						placeholder="ค้นหากล้อง..."
+						placeholder="Search camera..."
 						class="w-1/2 px-3 py-1.5 border-2 border-gray-200 rounded-lg text-xs transition-all duration-200 bg-white focus:outline-none focus:border-blue-500"
 					/>
 					</div>
@@ -1273,7 +1273,7 @@
                             <VideoStream serverUrl={videoServerUrl} />
                         {:else}
                             <div class="w-full h-full flex items-center justify-center text-gray-400">
-                                <p>เลือกกล้องเพื่อดู Stream</p>
+                                <p>Select a camera to view the stream.</p>
                             </div>
                         {/if}
                     </div>
@@ -1340,9 +1340,9 @@
 							class="w-full px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-medium text-sm"
 						>
 							{#if isSearching}
-								กำลังค้นหา...
+								Search...
 							{:else}
-								ค้นหา
+								Search
 							{/if}
 						</button>
 						{#if filteredDetections.length > 0}
@@ -1366,7 +1366,7 @@
 
 						<div class="flex flex-col gap-4 overflow-y-auto py-2 flex-1 scroll-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 hover:scrollbar-thumb-gray-400">
 							{#if detections.length === 0}
-								<div class="flex flex-col items-center justify-center w-full p-8 text-center text-gray-400">
+								<div class="flex flex-col items-center justify-center w-full p-3 text-center text-gray-400">
 									<div class="text-4xl mb-2 opacity-50">📷</div>
 									<p class="my-1 font-medium text-gray-600">No detections yet</p>
 									<small class="text-sm">Select cameras to start monitoring...</small>
@@ -1424,7 +1424,7 @@
 			<!-- Modal Header -->
 			<div class="flex items-center justify-between px-6 py-4 border-b border-gray-200">
 				<div>
-					<h2 class="text-xl font-bold text-gray-800">ผลการค้นหา</h2>
+					<h2 class="text-xl font-bold text-gray-800">Results</h2>
 					<p class="text-sm text-gray-600 mt-1">
 						{formatDateDisplay(startDate)} - {formatDateDisplay(endDate)}
 						<span class="ml-2 bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full text-xs font-semibold">
@@ -1448,8 +1448,8 @@
 				{#if filteredDetections.length === 0}
 					<div class="flex flex-col items-center justify-center h-full text-gray-400">
 						<div class="text-6xl mb-4 opacity-50">🔍</div>
-						<p class="text-lg font-medium text-gray-600">ไม่พบรายการในช่วงเวลาที่เลือก</p>
-						<p class="text-sm text-gray-500 mt-2">ลองเปลี่ยนช่วงเวลาในการค้นหา</p>
+						<p class="text-lg font-medium text-gray-600">No items found in the selected time period.</p>
+						<p class="text-sm text-gray-500 mt-2">Try changing the search time.</p>
 					</div>
 				{:else}
 					<div class="grid grid-cols-3 gap-4">
@@ -1469,13 +1469,13 @@
 			<!-- Modal Footer -->
 			<div class="flex items-center justify-between px-6 py-4 border-t border-gray-200 bg-gray-50">
 				<div class="text-sm text-gray-600">
-					แสดง {filteredDetections.length} จากทั้งหมด {filteredDetections.length} รายการ
+					Show {filteredDetections.length} from all {filteredDetections.length} list
 				</div>
 				<button 
 					onclick={() => showSearchModal = false}
 					class="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors font-medium"
 				>
-					ปิด
+					close
 				</button>
 			</div>
 		</div>
