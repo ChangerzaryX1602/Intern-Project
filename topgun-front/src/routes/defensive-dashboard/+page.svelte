@@ -501,68 +501,47 @@
 		onDisconnectAll={disconnectAllCameras}
 	/>
 
-	<!-- Main Content Layout: Camera Selector (30%) + Map (70%) -->
+	<!-- Main Content Layout: Camera Selector -->
 	<main class="flex gap-6 px-6 pt-6 pb-0 overflow-hidden flex-1">
-		<CameraSelector
-			{cameras}
-			{selectedCameraIds}
-			bind:searchName={searchCameraName}
-			isLoading={isLoadingCameras}
-			pagination={cameraPagination}
-			{wsConnections}
-			onToggleCamera={toggleCameraSelection}
-			onSearch={handleSearch}
-			onSearchChange={(value) => (searchCameraName = value)}
-			onSearchInput={handleSearchInput}
-			onNextPage={loadNextPage}
-			onPrevPage={loadPrevPage}
-		/>
-
-		<section class="w-full bg-white rounded-xl shadow-md overflow-hidden relative flex">
-			<div class="h-full bg-gray-300 w-[70%]">
-				<MapboxMap accessToken={mapboxToken} center={mapCenter} zoom={12} {markers} />
+		<section class="flex flex-col w-[80%]">
+			<div class="flex gap-6 h-[60%]">
+				<CameraSelector
+					{cameras}
+					{selectedCameraIds}
+					bind:searchName={searchCameraName}
+					isLoading={isLoadingCameras}
+					pagination={cameraPagination}
+					{wsConnections}
+					onToggleCamera={toggleCameraSelection}
+					onSearch={handleSearch}
+					onSearchChange={(value) => (searchCameraName = value)}
+					onSearchInput={handleSearchInput}
+					onNextPage={loadNextPage}
+					onPrevPage={loadPrevPage}
+				/>
+				
+				<div class="h-full bg-gray-300 w-[70%]">
+					<MapboxMap accessToken={mapboxToken} center={mapCenter} zoom={12} {markers} />
+				</div>
 			</div>
-			<div class="bg-white w-[30%] flex flex-col justify-start items-center px-4 py-4 gap-4 border-b border-gray-200">
-				<!-- Model Upload Section -->
-				<div class="w-full">
-					<div class="bg-gradient-to-r from-indigo-50 to-blue-50 rounded-lg p-2 mb-3">
-						<div class="flex justify-center items-center gap-2">
-							<span class="text-2xl">🤖</span>
-							<div>
-								<h3 class="font-bold text-gray-800 text-sm">Current Model</h3>
-								<p class="text-xs text-gray-600">YOLO v8 NCNN Model 960</p>
-							</div>
-						</div>
-					</div>
 
-					<label for="file-upload" class="block text-sm font-semibold text-gray-700 mb-2">Upload New Model</label>
-					<div class="relative">
-						<input 
-							id="file-upload" 
-							type="file" 
-							accept=".pt,.onnx,.pb,.tflite,.pth"
-							class="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-							onchange={uploadModel}
-							bind:this={fileInputRef}
-							disabled={isUploadingModel}
-						/>
-						<div class="flex items-center justify-center gap-2 px-4 py-3 bg-indigo-50 border-2 border-dashed border-indigo-300 rounded-lg hover:bg-indigo-100 hover:border-indigo-400 transition-all cursor-pointer {isUploadingModel ? 'opacity-50 cursor-not-allowed' : ''}">
-							{#if isUploadingModel}
-								<span class="text-lg animate-spin">⌛</span>
-								<span class="text-sm font-medium text-indigo-700">Uploading...</span>
-							{:else}
-								<span class="text-lg">⏫</span>
-								<span class="text-sm font-medium text-indigo-700">Select model file</span>
-							{/if}
-						</div>
-						<p class="text-xs text-gray-500 mt-1.5 text-center">Supported: .pt, .onnx, .pb, .tflite</p>
-						{#if uploadProgress}
-							<p class="text-xs text-green-600 mt-1.5 text-center font-medium">{uploadProgress}</p>
-						{/if}
+			<div class="flex h-[35%] mt-6">
+				<div class="flex gap-6">
+					<div class="bg-white min-w-[50%] rounded-xl shadow-md overflow-hidden relative flex flex-col gap-4 px-4 py-4"> 
+						เอาไว้ทำไร
 					</div>
 				</div>
-				
-				<div class="w-full border-t border-gray-200 pt-2">
+
+				<div class="h-full bg-black w-[60%]">
+					<VideoStream serverUrl={videoServerUrl} showStats={true} autoReconnect={true} />
+				</div>
+			</div>
+		</section>
+		
+		<section class="bg-white rounded-xl shadow-md overflow-hidden relative flex">
+			<div class="bg-white flex flex-col justify-between items-center px-4 py-4 gap-4 border-b border-gray-200">
+				<!-- Model Upload Section -->
+				<div class="w-full">
 					<div class="flex justify-between items-center mb-3">
 						<h2 class="m-0 text-lg flex items-center gap-2 text-gray-800 font-bold">
 							<span class="inline-block">📋</span>
@@ -592,66 +571,92 @@
 						{/if}
 					</div>
 				</div>
+
+				<div class="bg-white rounded-xl shadow-md overflow-hidden relative flex flex-col gap-4 px-4 py-4"> 
+					<h1 class="text-lg font-bold text-gray-800">ค้นหาประวัติ</h1>
+					<div class="flex flex-col gap-3">
+						<div class="flex gap-3">
+							<div class="flex-1">
+								<label for="start-date" class="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+								<input 
+									id="start-date" 
+									type="date" 
+									bind:value={startDate}
+									class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" 
+								/>
+							</div>
+							<div class="flex-1">
+								<label for="end-date" class="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+								<input 
+									id="end-date" 
+									type="date" 
+									bind:value={endDate}
+									class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" 
+								/>
+							</div>
+						</div>
+						<button 
+							onclick={searchDetectionsByDate}
+							disabled={isSearching || !startDate || !endDate}
+							class="w-full px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-medium text-sm"
+						>
+							{#if isSearching}
+								กำลังค้นหา...
+							{:else}
+								ค้นหา
+							{/if}
+						</button>
+						{#if searchError}
+							<p class="text-xs text-red-600 text-center">{searchError}</p>
+						{/if}
+						{#if filteredDetections.length > 0}
+							<p class="text-sm text-green-600 text-center font-medium">
+								พบ {filteredDetections.length} รายการ
+							</p>
+						{/if}
+					</div>
+				</div>
+				
+				<!-- Upload New Model -->
+				<div class="w-full border-t border-gray-200 pt-2">
+					<div class="bg-gradient-to-r from-indigo-50 to-blue-50 rounded-lg p-2 mb-3">
+						<div class="flex justify-center items-center gap-2">
+							<span class="text-2xl">🤖</span>
+							<div>
+								<h3 class="font-bold text-gray-800 text-sm">Current Model</h3>
+								<p class="text-xs text-gray-600">YOLO v8 NCNN Model 960</p>
+							</div>
+						</div>
+					</div>
+					<label for="file-upload" class="block text-sm font-semibold text-gray-700 mb-2">Upload New Model</label>
+					<div class="relative">
+						<input 
+							id="file-upload" 
+							type="file" 
+							accept=".pt,.onnx,.pb,.tflite,.pth"
+							class="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+							onchange={uploadModel}
+							bind:this={fileInputRef}
+							disabled={isUploadingModel}
+						/>
+						<div class="flex items-center justify-center gap-2 px-4 py-3 bg-indigo-50 border-2 border-dashed border-indigo-300 rounded-lg hover:bg-indigo-100 hover:border-indigo-400 transition-all cursor-pointer {isUploadingModel ? 'opacity-50 cursor-not-allowed' : ''}">
+							{#if isUploadingModel}
+								<span class="text-lg animate-spin">⌛</span>
+								<span class="text-sm font-medium text-indigo-700">Uploading...</span>
+							{:else}
+								<span class="text-lg">⏫</span>
+								<span class="text-sm font-medium text-indigo-700">Select model file</span>
+							{/if}
+						</div>
+						<p class="text-xs text-gray-500 mt-1.5 text-center">Supported: .pt, .onnx, .pb, .tflite</p>
+						{#if uploadProgress}
+							<p class="text-xs text-green-600 mt-1.5 text-center font-medium">{uploadProgress}</p>
+						{/if}
+					</div>
+				</div>
 			</div>
 		</section>
 	</main>
-
-	<!-- Bottom Horizontal Detection List -->
-	<div class="flex gap-6 px-6 py-2 h-[30%]">
-		<div class="bg-white rounded-xl shadow-md overflow-hidden relative w-[30%] flex flex-col gap-4 px-4 py-4"> 
-			<h1 class="text-lg font-bold text-gray-800">ค้นหาประวัติ</h1>
-			<div class="flex flex-col gap-3">
-				<div class="flex gap-3">
-					<div class="flex-1">
-						<label for="start-date" class="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
-						<input 
-							id="start-date" 
-							type="date" 
-							bind:value={startDate}
-							class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" 
-						/>
-					</div>
-					<div class="flex-1">
-						<label for="end-date" class="block text-sm font-medium text-gray-700 mb-1">End Date</label>
-						<input 
-							id="end-date" 
-							type="date" 
-							bind:value={endDate}
-							class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" 
-						/>
-					</div>
-				</div>
-				<button 
-					onclick={searchDetectionsByDate}
-					disabled={isSearching || !startDate || !endDate}
-					class="w-full px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-medium text-sm"
-				>
-					{#if isSearching}
-						กำลังค้นหา...
-					{:else}
-						ค้นหา
-					{/if}
-				</button>
-				{#if searchError}
-					<p class="text-xs text-red-600 text-center">{searchError}</p>
-				{/if}
-				{#if filteredDetections.length > 0}
-					<p class="text-sm text-green-600 text-center font-medium">
-						พบ {filteredDetections.length} รายการ
-					</p>
-				{/if}
-			</div>
-			
-		</div>
-		<section class="w-full bg-white rounded-xl shadow-md overflow-hidden relative flex">
-			<div class="h-full bg-black w-[73.5%]">
-				<VideoStream serverUrl={videoServerUrl} showStats={true} autoReconnect={true} />
-			</div>
-			<div class="bg-white flex flex-col justify-center items-center"> 
-				ทิศทาง
-			</div>
-		</section>
-	</div>
 </div>
 
 <!-- Search Results Modal -->
