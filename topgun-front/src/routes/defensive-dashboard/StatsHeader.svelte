@@ -88,7 +88,10 @@
 					class="flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors cursor-pointer"
 					title="Notification settings"
 				>
-					<span class="text-lg">🔔</span>
+					<span
+						class="text-lg transition-all"
+						class:pulse={detectionsCount > 0}
+					>🔔</span>
 					<span>Notifications</span>
 					{#if getNotificationCount() > 0}
 						<span class="ml-1 inline-block px-1 bg-white/30 rounded-full">ON</span>
@@ -171,4 +174,14 @@
 </header>
 
 <style>
+	@keyframes pulse {
+	0% { transform: scale(1); }
+	50% { transform: scale(1.3); }
+	100% { transform: scale(1); }
+}
+
+.pulse {
+	animation: pulse 1s infinite ease-in-out;
+	filter: drop-shadow(0 0 8px rgba(255, 255, 0, 0.6));
+}
 </style>
